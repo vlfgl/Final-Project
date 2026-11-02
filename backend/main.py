@@ -5,10 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import chat, conversations, data, me
+from app.routers import chat, conversations, goals, me, transactions, uploads
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("finance-assistant")
+logger = logging.getLogger("spending-coach")
 
 app = FastAPI(
     title="AI 소비 패턴 분석 및 절약 코치 API",
@@ -39,7 +39,9 @@ app.add_middleware(
 )
 
 app.include_router(me.router)
-app.include_router(data.router)
+app.include_router(uploads.router)  # /api/transactions/bulk 을 /{doc_id}보다 먼저 등록
+app.include_router(transactions.router)
+app.include_router(goals.router)
 app.include_router(conversations.router)
 app.include_router(chat.router)
 

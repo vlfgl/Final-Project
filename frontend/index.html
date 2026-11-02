@@ -90,7 +90,7 @@
     <section class="panel center">
       <nav class="tabs" role="tablist">
         <button class="tab active" role="tab" data-tab="chat" aria-selected="true">AI 채팅</button>
-        <button class="tab" role="tab" data-tab="data" aria-selected="false">데이터 관리</button>
+        <button class="tab" role="tab" data-tab="data" aria-selected="false">지출 내역</button>
       </nav>
 
       <div id="tab-chat" class="tab-body">
@@ -112,22 +112,37 @@
       </div>
 
       <div id="tab-data" class="tab-body hidden">
+        <div class="upload-bar">
+          <div>
+            <div class="upload-title">📷 카드 내역 캡처 · 영수증으로 한 번에 추가</div>
+            <div class="muted small">카드·은행 앱의 거래 내역(목록·상세) 화면 캡처나 영수증 사진을 올리면 AI가 읽고 자동 분류해요. 입금은 자동으로 빠져요. 여러 장 선택 가능</div>
+          </div>
+          <label class="btn upload-btn">
+            이미지 올리기
+            <input id="uploadInput" type="file" accept="image/*" multiple hidden />
+          </label>
+        </div>
+        <details class="manual-add">
+          <summary>직접 입력하기</summary>
         <form id="dataForm" class="data-form">
           <input type="hidden" id="dataId" />
-          <label>날짜<input type="date" id="dataDate" required /></label>
-          <label>금액(원)<input type="number" id="dataValue" min="1" max="100000000" step="1" required placeholder="12000" /></label>
+          <label>날짜<input type="date" id="txDate" required /></label>
+          <label>금액(원)<input type="number" id="txAmount" min="1" max="100000000" step="1" required placeholder="5600" /></label>
+          <label class="grow">가맹점<input type="text" id="txMerchant" maxlength="100" required placeholder="스타벅스 강남역점" /></label>
           <label>카테고리
-            <select id="dataCategory">
-              <option>식비</option><option>카페</option><option>교통</option><option>쇼핑</option>
-              <option>주거/통신</option><option>구독</option><option>문화/여가</option><option>의료</option><option>기타</option>
+            <select id="txCategory">
+              <option>식비</option><option>배달</option><option>카페·간식</option><option>장보기·생활</option>
+              <option>교통</option><option>쇼핑</option><option>주거·통신</option><option>구독</option>
+              <option>문화·여가</option><option>의료·건강</option><option>교육</option><option>기타</option>
             </select>
           </label>
-          <label class="grow">메모<input type="text" id="dataMemo" maxlength="180" placeholder="점심 식사" /></label>
+          <label class="grow">메모 (선택)<input type="text" id="txMemo" maxlength="200" placeholder="친구 생일" /></label>
           <div class="form-actions">
             <button id="dataSubmit" class="btn" type="submit">추가</button>
             <button id="dataCancel" class="btn btn-ghost hidden" type="button">취소</button>
           </div>
         </form>
+        </details>
         <p id="dataMessage" class="form-msg" role="status"></p>
 
         <div class="data-toolbar">
@@ -137,7 +152,7 @@
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>날짜</th><th class="num">금액</th><th>카테고리</th><th>메모</th><th></th></tr></thead>
+            <thead><tr><th>날짜</th><th>가맹점</th><th>카테고리</th><th class="num">금액</th><th></th></tr></thead>
             <tbody id="dataTableBody"></tbody>
           </table>
         </div>
@@ -147,7 +162,7 @@
     <!-- 데이터 요약 -->
     <aside class="panel summary">
       <div class="panel-head">
-        <h2>데이터 요약</h2>
+        <h2>소비 요약</h2>
         <button id="refreshSummary" class="icon-btn small" type="button" aria-label="요약 새로고침">↻</button>
       </div>
       <div id="summaryBody" class="summary-body">
@@ -155,6 +170,64 @@
       </div>
     </aside>
   </main>
+
+  <!-- 이미지 인식 → 확인 → 저장 -->
+  <div id="uploadModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="uploadTitle">
+    <div class="modal-card wide">
+      <div class="modal-head">
+        <h2 id="uploadTitle">이미지 인식</h2>
+        <button id="uploadClose" class="icon-btn small" type="button" aria-label="닫기">✕</button>
+      </div>
+      <ul id="uploadProgress" class="upload-progress"></ul>
+      <div id="reviewSection" class="hidden">
+        <p class="muted small">AI가 읽은 내용이에요. <b>저장 전에 날짜·금액·가맹점을 확인</b>하고, 틀린 값은 고쳐 주세요. 표시가 있는 행은 확인이 필요해요. · AI 생성 결과</p>
+        <div class="table-wrap review-wrap">
+          <table class="data-table review-table">
+            <thead><tr><th><input type="checkbox" id="reviewAll" aria-label="전체 선택" checked /></th><th>날짜</th><th>가맹점</th><th class="num">금액(원)</th><th>카테고리</th><th>확인 사항</th></tr></thead>
+            <tbody id="reviewBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <span id="reviewCount" class="muted small grow-left"></span>
+        <button id="uploadCancel" class="btn btn-ghost" type="button">취소</button>
+        <button id="reviewSave" class="btn" type="button" disabled>저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 월 절약 목표 설정 -->
+  <div id="goalModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="goalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="goalTitle">절약 목표</h2>
+        <button id="goalClose" class="icon-btn small" type="button" aria-label="닫기">✕</button>
+      </div>
+      <div class="suggest-box">
+        <button id="goalSuggestBtn" class="btn btn-ghost btn-small" type="button">추천값 불러오기</button>
+        <span id="goalSuggestInfo" class="muted small">최근 3개월 지출 평균을 바탕으로 계산해요.</span>
+      </div>
+      <label class="goal-field">월 총예산 (원)
+        <input type="number" id="goalTotal" min="1" max="100000000" step="10000" placeholder="1500000" />
+        <span id="goalTotalHint" class="muted small"></span>
+      </label>
+      <div class="goal-field">
+        <div class="goal-sub">카테고리 한도 <span class="muted small">(선택, 최대 3개)</span></div>
+        <div id="goalLimits"></div>
+        <button id="goalAddLimit" class="link-btn" type="button">+ 카테고리 한도 추가</button>
+      </div>
+      <p id="goalMsg" class="form-msg err" role="alert"></p>
+      <details id="goalHistoryBox" class="hidden">
+        <summary class="muted small">이번 달 변경 이력</summary>
+        <ul id="goalHistory" class="goal-history"></ul>
+      </details>
+      <div class="modal-actions">
+        <button id="goalDelete" class="btn btn-ghost danger-text grow-left hidden" type="button">목표 해제</button>
+        <button id="goalCancel" class="btn btn-ghost" type="button">취소</button>
+        <button id="goalSave" class="btn" type="button">저장</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast hidden" role="status"></div>
   <script type="module" src="app.js"></script>

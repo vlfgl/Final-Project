@@ -16,6 +16,12 @@ class Settings:
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "500"))
     CHAT_HISTORY_LIMIT: int = int(os.getenv("CHAT_HISTORY_LIMIT", "10"))
 
+    # 이미지 인식(Vision) 모델과 응답 토큰 상한 — 한 장에 거래가 많으면 출력이 길어져서 채팅보다 크게
+    OPENAI_VISION_MODEL: str = os.getenv("OPENAI_VISION_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+    VISION_MAX_TOKENS: int = int(os.getenv("VISION_MAX_TOKENS", "2500"))
+    # 사용자별 하루 이미지 인식 장수 상한 (비용 안전장치)
+    DAILY_IMAGE_LIMIT: int = int(os.getenv("DAILY_IMAGE_LIMIT", "30"))
+
     # 사용자별 하루 채팅 횟수 상한 (비용 안전장치)
     DAILY_CHAT_LIMIT: int = int(os.getenv("DAILY_CHAT_LIMIT", "50"))
     # 동의서 내용이 바뀌면 버전을 올려 재동의를 받는다

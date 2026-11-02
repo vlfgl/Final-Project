@@ -7,16 +7,20 @@ from app.config import settings
 from app.db import CONVERSATIONS, get_store, user_col
 from app.services import conversation_service, summary_service
 
-SYSTEM_TEMPLATE = """당신은 사용자의 개인 재무 관리 비서입니다.
+SYSTEM_TEMPLATE = """당신은 사용자의 소비 습관을 함께 관리하는 AI 절약 코치입니다.
 아래는 사용자의 실제 소비 지출 데이터 요약입니다. 금액 단위는 원(KRW)입니다.
 
 [사용자 지출 데이터 요약]
 {summary}
 
+[절약 목표]
+{goal}
+
 규칙:
 - 반드시 위 데이터를 근거로 구체적인 숫자를 들어 답하세요.
 - 요약에 없는 정보(예: 특정 날짜의 개별 거래)는 추측하지 말고, 요약으로 알 수 있는 범위를 밝히세요.
 - 절약 조언은 카테고리 비중과 추세를 근거로 실천 가능한 형태로 제시하세요.
+- 절약 목표가 있으면 목표 대비 진행 상황(사용률, 월말 예상)을 기준으로 조언하세요. 목표가 없으면 목표 설정을 권할 수 있습니다.
 - 한국어로, 3~6문장 이내로 간결하게 답하세요."""
 
 
@@ -36,8 +40,8 @@ def _get_client() -> OpenAI:
     return _client
 
 
-def build_system_prompt(summary: dict) -> str:
-    return SYSTEM_TEMPLATE.format(summary=summary_service.to_prompt_text(summary))
+def build_system_prompt(summary: dict, goal_text: str = "- 이번 달 절약 목표: 아직 없음") -> str:
+    return SYSTEM_TEMPLATE.format(summary=summary_service.to_prompt_text(summary), goal=goal_text)
 
 
 def chat(uid: str, message: str, conversation_id: Optional[str] = None) -> dict:
@@ -49,7 +53,8 @@ def chat(uid: str, message: str, conversation_id: Optional[str] = None) -> dict:
     if conversation_id:
         conv = get_store().get(user_col(uid, CONVERSATIONS), conversation_id)  # 없으면 NotFoundError
         history = conv.get("messages", [])[-settings.CHAT_HISTORY_LIMIT:]
-    messages = [{"role": "system", "content": build_system_prompt(summary)}, *history,
+    from app.services import goal_service
+    messages = [{"role": "system", "content": build_system_prompt(summary, goal_service.prompt_text(uid))}, *history,
                 {"role": "user", "content": message}]
 
     # 3) GPT API 호출

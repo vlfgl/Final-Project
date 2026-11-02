@@ -1,6 +1,6 @@
 """사용자 프로필, 동의, 데이터 삭제, 체험용 샘플 데이터, 하루 사용량 제한."""
 import csv
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from app.auth import CurrentUser
@@ -9,7 +9,7 @@ from app.db import TRANSACTIONS, USER_SUBCOLLECTIONS, USERS, get_store, user_col
 from app.services import summary_service
 
 KST = timezone(timedelta(hours=9))
-SAMPLE_CSV = Path(__file__).resolve().parent.parent.parent / "data" / "spending_2026.csv"
+SAMPLE_CSV = Path(__file__).resolve().parent.parent.parent / "data" / "sample_transactions.csv"
 
 
 def _now() -> str:
@@ -62,8 +62,14 @@ def seed_demo_data(user: CurrentUser) -> dict:
     col = user_col(user.uid, TRANSACTIONS)
     if store.list(col, limit=1):
         return {"seeded": 0}
+    # 샘플은 2026-05-01~10-31 데이터. 마지막 날이 '오늘'이 되도록 날짜를 통째로 옮겨서
+    # 언제 체험해도 "이번 달"과 "최근 추세"가 채워져 보이게 한다.
+    shift = summary_service.today_kst() - date(2026, 10, 31)
     with SAMPLE_CSV.open(encoding="utf-8") as f:
-        rows = [{"date": r["date"], "value": int(r["value"]), "memo": r["memo"]} for r in csv.DictReader(f)]
+        now = _now()
+        rows = [{"date": (date.fromisoformat(r["date"]) + shift).isoformat(), "amount": int(r["amount"]), "merchant": r["merchant"], "category": r["category"],
+                 "memo": "", "source": "sample", "category_by": "user", "created_at": now}
+                for r in csv.DictReader(f)]
     n = store.batch_add(col, rows)
     summary_service.invalidate_cache(user.uid)
     return {"seeded": n}
@@ -73,13 +79,21 @@ class DailyLimitExceeded(Exception):
     pass
 
 
-def consume_chat_quota(user: CurrentUser) -> int:
-    """오늘(KST) 채팅 횟수를 1 늘리고 남은 횟수를 돌려준다. 한도 초과 시 예외."""
+def _consume(user: CurrentUser, field: str, limit: int) -> int:
+    """오늘(KST) 사용 횟수를 1 늘리고 남은 횟수를 돌려준다. 한도 초과 시 예외."""
     store = get_store()
     today = datetime.now(KST).date().isoformat()
-    usage = (store.get_or_none(USERS, user.uid) or {}).get("chat_usage") or {}
+    usage = (store.get_or_none(USERS, user.uid) or {}).get(field) or {}
     count = usage.get("count", 0) if usage.get("date") == today else 0
-    if count >= settings.DAILY_CHAT_LIMIT:
+    if count >= limit:
         raise DailyLimitExceeded()
-    store.set(USERS, user.uid, {"chat_usage": {"date": today, "count": count + 1}})
-    return settings.DAILY_CHAT_LIMIT - count - 1
+    store.set(USERS, user.uid, {field: {"date": today, "count": count + 1}})
+    return limit - count - 1
+
+
+def consume_chat_quota(user: CurrentUser) -> int:
+    return _consume(user, "chat_usage", settings.DAILY_CHAT_LIMIT)
+
+
+def consume_image_quota(user: CurrentUser) -> int:
+    return _consume(user, "image_usage", settings.DAILY_IMAGE_LIMIT)

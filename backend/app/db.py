@@ -17,7 +17,8 @@ from app.config import settings
 USERS = "users"
 TRANSACTIONS = "transactions"
 CONVERSATIONS = "conversations"
-USER_SUBCOLLECTIONS = (TRANSACTIONS, CONVERSATIONS)
+GOALS = "goals"
+USER_SUBCOLLECTIONS = (TRANSACTIONS, CONVERSATIONS, GOALS)
 
 
 def user_col(uid: str, name: str) -> str:
