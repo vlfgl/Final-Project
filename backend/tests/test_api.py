@@ -13,7 +13,7 @@ ANON = {"Authorization": "Bearer dev:guest1:anon"}
 
 def fake_client():
     m = MagicMock()
-    m.chat.completions.create.return_value.choices = [MagicMock(message=MagicMock(content="테스트 답변"))]
+    m.chat.completions.create.return_value.choices = [MagicMock(message=MagicMock(content="테스트 답변", tool_calls=None))]
     return m
 
 # 1) 인증 없으면 401
@@ -247,4 +247,130 @@ assert c.delete(f"/api/goals/{cur}", headers=HG).status_code == 204
 assert c.get(f"/api/goals/{cur}", headers=HG).json()["goal"] is None
 c.put(f"/api/goals/{cur}", headers=HG, json=body)
 d = c.delete("/api/me", headers=HG).json(); assert d["deleted"]["goals"] == 1, d
+# 18) AI Agent: 모델이 고른 도구를 실행하는 루프, 근거(trace), 제안(actions), 단계 한도, 사용자 범위
+import json as _json
+from types import SimpleNamespace as NS
+
+class ScriptedLLM:
+    """모델 응답을 순서대로 흉내 낸다. 각 항목은 ('tools', [(name, args), ...]) 또는 ('text', '답변')."""
+    def __init__(self, script):
+        self.script, self.calls = list(script), []
+        self.chat = NS(completions=NS(create=self.create))
+    def create(self, **kw):
+        self.calls.append({**kw, "messages": [dict(m) for m in kw["messages"]]})
+        kind, val = self.script.pop(0) if self.script else ("tools", [("get_monthly_summary", {"month": "2026-10"})])
+        if kind == "text":
+            msg = NS(content=val, tool_calls=None)
+        else:
+            msg = NS(content=None, tool_calls=[NS(id=f"call_{len(self.calls)}_{i}", function=NS(name=n, arguments=_json.dumps(a, ensure_ascii=False)))
+                                               for i, (n, a) in enumerate(val)])
+        return NS(choices=[NS(message=msg)], usage=NS(prompt_tokens=100, completion_tokens=20))
+
+G = {"Authorization": "Bearer dev:agentdemo:anon"}
+c.post("/api/me/consent", headers=G); c.post("/api/me/demo", headers=G)
+c.post("/api/me/consent", headers=H("mallory"))
+c.post("/api/transactions", headers=H("mallory"), json={"date": "2026-10-05", "amount": 999999, "merchant": "스타벅스 비밀점", "category": "카페·간식"})
+cur = _tk().strftime("%Y-%m")
+llm = ScriptedLLM([
+    ("tools", [("search_transactions", {"start_date": "2026-10-01", "end_date": "2026-10-31", "merchant_query": "스타벅스", "category": None, "min_amount": None, "limit": None}),
+               ("detect_overspending", {"month": cur})]),                      # 한 번에 도구 2개 (모델의 선택)
+    ("tools", [("get_category_trend", {"category": "커피", "months": None})]),  # 잘못된 인자 → error 결과
+    ("tools", [("get_category_trend", {"category": "카페·간식", "months": 3})]),  # 모델이 고쳐서 다시 호출
+    ("text", "10월 스타벅스는 N건이에요."),
+])
+from app.services import chat_service as _cs
+with patch.object(_cs, "_get_client", return_value=llm):
+    r = c.post("/api/chat", headers=G, json={"message": "10월에 스타벅스 몇 번 갔어? 요즘 뭐가 문제야?"}); assert r.status_code == 200, r.text
+res = r.json()
+assert res["mode"] == "agent" and res["reply"].startswith("10월 스타벅스")
+tr = res["trace"]; assert [t["tool"] for t in tr] == ["search_transactions", "detect_overspending", "get_category_trend", "get_category_trend"], tr
+assert [t["ok"] for t in tr] == [True, True, False, True] and tr[0]["step"] == 1 and tr[3]["step"] == 3
+assert res["usage"]["model_calls"] == 4 and res["usage"]["prompt_tokens"] == 400
+# 도구 결과가 모델에게 전달됨 + 사용자 범위(mallory의 999,999원 스타벅스는 안 보임)
+second = llm.calls[1]["messages"]
+tool_msgs = [m for m in second if m["role"] == "tool"]
+first_result = _json.loads(tool_msgs[0]["content"])
+assert first_result["count"] > 0 and all(i["amount"] != 999999 for i in first_result["recent_items"])
+assert second[-3]["role"] == "assistant" and len(second[-3]["tool_calls"]) == 2
+assert "error" in _json.loads(llm.calls[2]["messages"][-1]["content"])      # 잘못된 인자는 error로 전달
+assert llm.calls[0]["tool_choice"] == "auto" and len(llm.calls[0]["tools"]) == 7
+assert "오늘" in llm.calls[0]["messages"][0]["content"] and "합계" not in llm.calls[0]["messages"][0]["content"]  # 시스템 프롬프트엔 숫자 요약 없음
+# 대화에 근거 저장 → 다음 질문에서는 글만 history로
+cid = res["conversation_id"]
+conv = c.get(f"/api/conversations/{cid}", headers=G).json()
+assert conv["messages"][1]["trace"][0]["tool"] == "search_transactions"
+llm2 = ScriptedLLM([("text", "네")])
+with patch.object(_cs, "_get_client", return_value=llm2):
+    c.post("/api/chat", headers=G, json={"message": "고마워", "conversation_id": cid})
+hist = llm2.calls[0]["messages"]
+assert hist[2] == {"role": "assistant", "content": "10월 스타벅스는 N건이에요."} and "trace" not in hist[2]
+# 목표 제안: 저장되지 않고 actions로만 나옴
+from app.services import goal_service as _gs0
+_deliv = _gs0.spent_so_far("agentdemo", cur)[1].get("배달", 0) + 50000
+llm3 = ScriptedLLM([("tools", [("propose_goal", {"month": cur, "total_budget": 1500000, "category_limits": [{"category": "배달", "limit": _deliv}], "reason": "배달 증가"})]),
+                    ("text", "아래 [적용] 버튼을 누르면 저장돼요.")])
+with patch.object(_cs, "_get_client", return_value=llm3):
+    res3 = c.post("/api/chat", headers=G, json={"message": "배달 한도 15만원으로 목표 잡아줘"}).json()
+assert c.post("/api/chat", headers=G, json={"message": "4번째"}).status_code == 429   # 도구를 여러 번 불러도 질문 1개 = 1회
+assert res3["actions"][0]["type"] == "goal_proposal" and res3["actions"][0]["total_budget"] == 1500000
+assert c.get(f"/api/goals/{cur}", headers=G).json()["goal"] is None          # 저장 안 됨
+# 단계 한도: 모델이 계속 도구만 부르면 5단계 후 tool_choice=none으로 답만 받음
+llm4 = ScriptedLLM([("tools", [("get_monthly_summary", {"month": "2026-10"})])] * 5 + [("text", "정리하면…")])
+with patch.object(_cs, "_get_client", return_value=llm4):
+    res4 = _cs.chat("agentdemo", "다 알려줘")   # API 경로는 하루 한도(테스트 3회)를 이미 써서 서비스 직접 호출
+assert len(llm4.calls) == 6 and llm4.calls[-1]["tool_choice"] == "none" and res4["reply"] == "정리하면…" and len(res4["trace"]) == 5
+# 도구 직접 실행: 없는 도구 / JSON 아님
+from app.services import agent_tools as _at
+assert not _at.execute("agentdemo", "rm_rf", "{}")["ok"] and not _at.execute("agentdemo", "get_monthly_summary", "not json")["ok"]
+# 비교용 baseline 모드
+llm5 = ScriptedLLM([("text", "요약 기반 답변")])
+with patch.object(_cs, "_get_client", return_value=llm5):
+    out = _cs.chat("agentdemo", "이번 달 어때?", mode="baseline")
+assert out["mode"] == "baseline" and out["trace"] == [] and "[사용자 지출 데이터 요약]" in llm5.calls[0]["messages"][0]["content"] and "tools" not in llm5.calls[0]
+
+# 19) 목표 제안 보완: 글로만 [적용] 안내 → 검증 후 재요청, 이미 쓴 금액보다 작은 한도 거부, 추천은 쓴 금액 이상
+from app.services import goal_service as _gs, agent_tools as _at
+spent_total, spent_cat = _gs.spent_so_far("agentdemo", cur)
+top_cat = max(spent_cat, key=spent_cat.get)
+bad = _at.execute("agentdemo", "propose_goal", _json.dumps({"month": cur, "total_budget": max(10000, spent_total + 100000),
+      "category_limits": [{"category": top_cat, "limit": max(1000, spent_cat[top_cat] - 1000)}], "reason": "x"}))
+assert not bad["ok"] and "이미" in bad["result"]["error"], bad
+sug = _gs.suggest("agentdemo", cur)
+assert sug["total_budget"] >= spent_total and all(l["limit"] >= l["spent_so_far"] for l in sug["category_limits"]), sug
+good_args = {"month": cur, "total_budget": sug["total_budget"], "category_limits": [{"category": l["category"], "limit": l["limit"]} for l in sug["category_limits"]], "reason": "최근 평균 기준"}
+llm6 = ScriptedLLM([
+    ("tools", [("get_goal_progress", {"month": cur})]),
+    ("text", "총예산 180만 원을 제안해요. 아래 [적용] 버튼을 누르면 저장돼요."),   # 도구 없이 글로만 제안
+    ("tools", [("propose_goal", good_args)]),                                         # 검증 메시지를 보고 도구 호출
+    ("text", "제안을 만들었어요. 아래 [적용] 버튼을 누르면 저장돼요."),
+])
+with patch.object(_cs, "_get_client", return_value=llm6):
+    out = _cs.chat("agentdemo", "이번 달 절약 목표 세워줘")
+assert [t["tool"] for t in out["trace"]] == ["get_goal_progress", "self_check", "propose_goal"], out["trace"]
+assert len(out["actions"]) == 1 and out["actions"][0]["total_budget"] == sug["total_budget"], out
+assert "[시스템 검증]" in llm6.calls[2]["messages"][-1]["content"]
+llm7 = ScriptedLLM([("text", "[적용] 버튼 안내"), ("text", "[적용] 버튼 안내")])  # 재요청은 한 번만
+with patch.object(_cs, "_get_client", return_value=llm7):
+    out = _cs.chat("agentdemo", "목표")
+assert len(llm7.calls) == 2 and out["actions"] == []
+
+# 20) 진행 중인 달 비교는 같은 기간(1~오늘), 한 번에 너무 많은 도구 호출은 4개까지만 실행
+_d = _tk().day
+cmp = _at.execute("agentdemo", "compare_months", _json.dumps({"month_a": _gs.current_month() if False else (_tk().replace(day=1) - __import__("datetime").timedelta(days=1)).strftime("%Y-%m"), "month_b": cur}))
+assert cmp["ok"] and f"1~{_d}일" in cmp["result"]["basis"] and cmp["result"]["month_a"]["full_month_total"] >= cmp["result"]["month_a"]["total"], cmp
+assert cmp["result"]["increased"] == [d["category"] for d in cmp["result"]["category_changes"] if d["diff"] > 0]
+ms = _at.execute("agentdemo", "get_monthly_summary", _json.dumps({"month": cur}))["result"]["previous_month"]
+assert "same_period_total" in ms and ms["change_pct"] == _at._pct(_at.execute("agentdemo", "get_monthly_summary", _json.dumps({"month": cur}))["result"]["total"], ms["same_period_total"])
+many = [("get_category_trend", {"category": c, "months": None}) for c in ["식비", "배달", "쇼핑", "교통", "카페·간식", "구독"]]
+llm8 = ScriptedLLM([("tools", many), ("text", "정리")])
+with patch.object(_cs, "_get_client", return_value=llm8):
+    out = _cs.chat("agentdemo", "전부 추이")
+assert len(out["trace"]) == 4
+tool_msgs = [m for m in llm8.calls[1]["messages"] if m["role"] == "tool"]
+assert len(tool_msgs) == 6 and "최대 4개" in tool_msgs[-1]["content"]   # 모든 호출 id에 응답은 돌려준다
+# 21) 목표가 없어도 목표 진행 상황 도구가 월말 예상을 준다 (월 요약과 같은 값)
+_gp = _at.execute("agentdemo", "get_goal_progress", _json.dumps({"month": cur}))["result"]
+_ms = _at.execute("agentdemo", "get_monthly_summary", _json.dumps({"month": cur}))["result"]
+if not _gp["has_goal"]:
+    assert _gp["projected_month_end"] == _ms["projected_month_end"] and _gp["spent_so_far"] == _ms["total"], (_gp, _ms)
 print("ALL TESTS PASSED")

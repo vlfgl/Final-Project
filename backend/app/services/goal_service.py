@@ -169,8 +169,22 @@ def _round_to(x: float, unit: int) -> int:
     return max(unit, int(round(x / unit)) * unit)
 
 
+def _ceil_to(x: float, unit: int) -> int:
+    return max(unit, -(-int(x) // unit) * unit)
+
+
+def spent_so_far(uid: str, month: str) -> tuple[int, dict]:
+    """해당 달에 지금까지 쓴 총액과 카테고리별 금액."""
+    start, end = _month_range(month)
+    by_cat = defaultdict(int)
+    for r in list_transactions(uid, start=start, end=end):
+        by_cat[r["category"]] += r["amount"]
+    return sum(by_cat.values()), dict(by_cat)
+
+
 def suggest(uid: str, month: str) -> dict:
-    """최근 3개 '완료된' 달 평균 기준 추천: 총예산 -10%, 변동 지출 상위 3개 카테고리 -15%."""
+    """최근 3개 '완료된' 달 평균 기준 추천: 총예산 -10%, 변동 지출 상위 3개 카테고리 -15%.
+    진행 중인 달이면 이미 쓴 금액보다 낮은 한도는 지킬 수 없으므로, 쓴 금액의 110%(5천 원 단위 올림)보다 낮게 잡지 않는다."""
     months = [_prev_month(month, i) for i in (1, 2, 3)]
     start, _ = _month_range(months[-1])
     _, end = _month_range(months[0])
@@ -185,16 +199,36 @@ def suggest(uid: str, month: str) -> dict:
         by_cat[r["category"]] += r["amount"]
     flexible = sorted(((c, v / n) for c, v in by_cat.items() if c not in FIXED_CATEGORIES and c != "기타"),
                       key=lambda x: x[1], reverse=True)[:3]
-    return {
+    in_progress = month == current_month()
+    spent_total, spent_cat = spent_so_far(uid, month) if in_progress else (0, {})
+
+    def floor_by_spent(value: int, spent: int, unit: int) -> tuple[int, bool]:
+        if in_progress and spent and value < spent * 1.1:
+            return _ceil_to(spent * 1.1, unit), True
+        return value, False
+
+    total_budget, total_adj = floor_by_spent(_round_to(total_avg * 0.9, 10000), spent_total, 10000)
+    limits = []
+    for c, avg in flexible:
+        limit, adj = floor_by_spent(_round_to(avg * 0.85, 5000), spent_cat.get(c, 0), 5000)
+        item = {"category": c, "average": round(avg), "limit": limit}
+        if in_progress:
+            item["spent_so_far"] = spent_cat.get(c, 0)
+            item["adjusted_for_spent"] = adj
+        limits.append(item)
+    out = {
         "available": True,
         "basis_months": have,
         "total_average": round(total_avg),
-        "total_budget": _round_to(total_avg * 0.9, 10000),
-        "category_limits": [
-            {"category": c, "average": round(avg), "limit": _round_to(avg * 0.85, 5000)} for c, avg in flexible
-        ],
-        "rule": "최근 지출 평균에서 총예산은 10%, 줄이기 쉬운 상위 3개 카테고리는 15% 줄인 값",
+        "total_budget": total_budget,
+        "category_limits": limits,
+        "rule": "최근 지출 평균에서 총예산은 10%, 줄이기 쉬운 상위 3개 카테고리는 15% 줄인 값. "
+                "진행 중인 달은 이미 쓴 금액의 110%보다 낮게 잡지 않음(adjusted_for_spent=true인 항목)",
     }
+    if in_progress:
+        out["spent_so_far_total"] = spent_total
+        out["total_adjusted_for_spent"] = total_adj
+    return out
 
 
 # ---------------------------------------------------------------- 채팅 프롬프트용

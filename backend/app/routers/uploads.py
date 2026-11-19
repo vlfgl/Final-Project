@@ -4,7 +4,7 @@ from app.auth import CurrentUser, require_consent
 from app.config import settings
 from app.schemas import BulkCreate, BulkResult, ExtractRequest, ExtractResponse
 from app.services import upload_service, user_service
-from app.services.chat_service import ChatError
+from app.services.llm import ChatError
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 

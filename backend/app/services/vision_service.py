@@ -9,7 +9,8 @@ from datetime import date
 
 from app.config import settings
 from app.schemas import CATEGORIES
-from app.services.chat_service import ChatError, _get_client
+from app.services.llm import ChatError
+from app.services.llm import get_client as _get_client
 
 WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 

@@ -15,6 +15,11 @@ class Settings:
     # 비용 제한: 답변 최대 토큰, 프롬프트에 포함할 이전 메시지 수
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "500"))
     CHAT_HISTORY_LIMIT: int = int(os.getenv("CHAT_HISTORY_LIMIT", "10"))
+    # agent: 모델이 도구를 골라 호출하는 방식(기본) | baseline: 요약을 프롬프트에 넣는 이전 방식(비교용)
+    COACH_MODE: str = os.getenv("COACH_MODE", "agent").lower()
+    # 한 질문에서 모델이 도구를 부를 수 있는 최대 단계 수 (무한 반복·비용 폭주 방지)
+    AGENT_MAX_STEPS: int = int(os.getenv("AGENT_MAX_STEPS", "5"))
+    AGENT_MAX_CALLS_PER_STEP: int = int(os.getenv("AGENT_MAX_CALLS_PER_STEP", "4"))
 
     # 이미지 인식(Vision) 모델과 응답 토큰 상한 — 한 장에 거래가 많으면 출력이 길어져서 채팅보다 크게
     OPENAI_VISION_MODEL: str = os.getenv("OPENAI_VISION_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))

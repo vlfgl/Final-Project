@@ -136,6 +136,8 @@ class Summary(BaseModel):
 class Message(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(..., min_length=1, max_length=4000)
+    trace: Optional[list[dict]] = Field(None, description="(assistant) Agent가 호출한 도구와 결과 요약")
+    actions: Optional[list[dict]] = Field(None, description="(assistant) 사용자가 적용할 수 있는 제안")
 
 
 class ConversationCreate(BaseModel):
@@ -172,5 +174,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     conversation_id: str
     reply: str
+    mode: str = Field(..., description="agent | baseline")
+    trace: list[dict] = Field(default_factory=list, description="모델이 고른 도구·인자·결과 요약(근거)")
+    actions: list[dict] = Field(default_factory=list, description="목표 변경 제안 등 사용자가 적용할 행동")
+    usage: dict = Field(default_factory=dict, description="모델 호출 수·토큰")
     summary: Summary
     remaining_today: int = Field(..., description="오늘 남은 채팅 횟수")

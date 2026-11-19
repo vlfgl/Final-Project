@@ -91,6 +91,7 @@
       <nav class="tabs" role="tablist">
         <button class="tab active" role="tab" data-tab="chat" aria-selected="true">AI 채팅</button>
         <button class="tab" role="tab" data-tab="data" aria-selected="false">지출 내역</button>
+        <button id="uploadCta" class="btn btn-small upload-cta" type="button" title="카드·은행 앱 캡처나 영수증 사진을 올리면 AI가 읽어요">📷 캡처·영수증으로 지출 추가</button>
       </nav>
 
       <div id="tab-chat" class="tab-body">
@@ -113,9 +114,15 @@
 
       <div id="tab-data" class="tab-body hidden">
         <div class="upload-bar">
-          <div>
-            <div class="upload-title">📷 카드 내역 캡처 · 영수증으로 한 번에 추가</div>
-            <div class="muted small">카드·은행 앱의 거래 내역(목록·상세) 화면 캡처나 영수증 사진을 올리면 AI가 읽고 자동 분류해요. 입금은 자동으로 빠져요. 여러 장 선택 가능</div>
+          <div class="upload-main">
+            <div class="upload-title">📷 카드 내역 캡처 · 영수증으로 지출 추가</div>
+            <div class="muted small">카드·은행 앱의 거래 내역(목록·상세) 캡처나 영수증 사진을 올리세요. 여러 장 한 번에, 끌어다 놓아도 돼요.</div>
+            <ol class="upload-steps" aria-label="처리 순서">
+              <li>이미지 올리기</li>
+              <li>AI가 날짜·금액·가맹점·카테고리 추출</li>
+              <li>내가 확인·수정</li>
+              <li>저장 → 요약에 반영</li>
+            </ol>
           </div>
           <label class="btn upload-btn">
             이미지 올리기

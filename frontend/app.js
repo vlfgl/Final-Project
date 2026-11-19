@@ -133,6 +133,8 @@
     });
     $("#tab-chat").classList.toggle("hidden", name !== "chat");
     $("#tab-data").classList.toggle("hidden", name !== "data");
+    // 지출 내역 탭에는 큰 업로드 상자가 있으므로 상단 버튼은 숨긴다
+    $("#uploadCta").classList.toggle("invisible", name === "data");
   }
 
   // ---------------------------------------------------------------- 채팅
@@ -147,27 +149,110 @@
       <div class="welcome">
         <p class="welcome-title">무엇이 궁금하세요?</p>
         <div class="chips">
-          <button class="chip" type="button">이번 달 지출 어때?</button>
-          <button class="chip" type="button">가장 많이 쓴 때는 언제야?</button>
-          <button class="chip" type="button">식비를 줄이려면 어떻게 해야 할까?</button>
-          <button class="chip" type="button">월별 지출 추세를 분석해줘</button>
+          <button class="chip" type="button">요즘 어디서 돈이 새고 있어?</button>
+          <button class="chip" type="button">지난달보다 뭐가 늘었어?</button>
+          <button class="chip" type="button">이번 달에 카페 몇 번 갔어?</button>
+          <button class="chip" type="button">이번 달 절약 목표 세워줘</button>
         </div>
+        <p class="welcome-upload muted small">지출 기록은 위쪽 <b>📷 캡처·영수증으로 지출 추가</b>로 바로 올릴 수 있어요.</p>
       </div>`;
   }
 
-  function addMessage(role, text) {
+  // Agent가 부른 도구 인자를 사람이 읽는 말로 (예: "2026-10-01~2026-10-31 · 스타벅스")
+  function argsText(args) {
+    const a = args || {};
+    const parts = [];
+    if (a.start_date || a.end_date) parts.push(`${a.start_date || ""}~${a.end_date || ""}`);
+    if (a.month) parts.push(a.month);
+    if (a.month_a || a.month_b) parts.push(`${a.month_a} → ${a.month_b}`);
+    for (const k of ["merchant_query", "category"]) if (a[k]) parts.push(a[k]);
+    if (a.min_amount) parts.push(`${won(a.min_amount)} 이상`);
+    if (a.months) parts.push(`최근 ${a.months}개월`);
+    return parts.join(" · ");
+  }
+
+  function traceBox(trace) {
+    const box = document.createElement("details");
+    box.className = "trace";
+    const ok = trace.filter((t) => t.ok).length;
+    const sum = document.createElement("summary");
+    sum.textContent = `🔎 근거 ${ok}개 — AI가 직접 고른 데이터 조회`;
+    box.appendChild(sum);
+    const ol = document.createElement("ol");
+    for (const t of trace) {
+      const li = document.createElement("li");
+      if (!t.ok) li.className = "retry";
+      const name = document.createElement("b");
+      name.textContent = t.label;
+      const arg = document.createElement("span");
+      arg.className = "trace-args";
+      const at = argsText(t.args);
+      arg.textContent = at ? ` (${at})` : "";
+      const res = document.createElement("span");
+      res.className = "trace-res";
+      res.textContent = t.ok ? ` → ${t.summary}` : t.tool === "self_check" ? ` → ${t.summary}` : " → 인자 오류, 고쳐서 다시 조회";
+      li.append(name, arg, res);
+      ol.appendChild(li);
+    }
+    box.appendChild(ol);
+    return box;
+  }
+
+  function goalProposalCard(a) {
+    const card = document.createElement("div");
+    card.className = "proposal";
+    const title = document.createElement("div");
+    title.className = "proposal-title";
+    title.textContent = `🎯 ${Number(a.month.slice(5))}월 목표 변경 제안`;
+    const body = document.createElement("div");
+    body.className = "proposal-body";
+    body.textContent = `총예산 ${won(a.total_budget)}` +
+      (a.category_limits.length ? " · " + a.category_limits.map((c) => `${c.category} ${won(c.limit)}`).join(" · ") : "");
+    const reason = document.createElement("div");
+    reason.className = "muted small";
+    reason.textContent = a.reason || "";
+    const btns = document.createElement("div");
+    btns.className = "proposal-actions";
+    const apply = document.createElement("button");
+    apply.type = "button"; apply.className = "btn btn-small"; apply.textContent = "적용";
+    const skip = document.createElement("button");
+    skip.type = "button"; skip.className = "btn btn-ghost btn-small"; skip.textContent = "무시";
+    apply.addEventListener("click", async () => {
+      apply.disabled = true;
+      try {
+        await api(`/api/goals/${a.month}`, { method: "PUT", body: { total_budget: a.total_budget, category_limits: a.category_limits } });
+        apply.textContent = "✓ 적용됨";
+        skip.remove();
+        toast("목표를 저장했어요.");
+        loadGoal();
+      } catch (e) {
+        apply.disabled = false;
+        toast(e.message);
+      }
+    });
+    skip.addEventListener("click", () => card.remove());
+    btns.append(apply, skip);
+    card.append(title, body, reason, btns);
+    return card;
+  }
+
+  function addMessage(role, text, extra) {
     const welcome = messagesEl().querySelector(".welcome");
     if (welcome) welcome.remove();
     const el = document.createElement("div");
     el.className = `msg ${role}`;
     el.textContent = text; // textContent: 사용자 입력/AI 응답을 HTML로 해석하지 않음 (XSS 방지)
     if (role === "assistant") {
+      if (extra && extra.trace && extra.trace.length) el.appendChild(traceBox(extra.trace));
       const tag = document.createElement("span");
       tag.className = "ai-tag";
       tag.textContent = "AI 생성 답변 · 참고용";
       el.appendChild(tag);
     }
     messagesEl().appendChild(el);
+    if (role === "assistant" && extra && extra.actions) {
+      for (const a of extra.actions) if (a.type === "goal_proposal") messagesEl().appendChild(goalProposalCard(a));
+    }
     messagesEl().scrollTop = messagesEl().scrollHeight;
     return el;
   }
@@ -175,7 +260,7 @@
   function addTyping() {
     const el = document.createElement("div");
     el.className = "msg assistant";
-    el.innerHTML = '<span class="typing"><span></span><span></span><span></span></span><span class="typing-label">지출 데이터를 분석하는 중…</span>';
+    el.innerHTML = '<span class="typing"><span></span><span></span><span></span></span><span class="typing-label">AI가 필요한 데이터를 골라 확인하는 중…</span>';
     messagesEl().appendChild(el);
     messagesEl().scrollTop = messagesEl().scrollHeight;
     return el;
@@ -198,7 +283,7 @@
         timeout: 90000, // 콜드스타트 + GPT 응답 시간 고려
       });
       typing.remove();
-      addMessage("assistant", res.reply);
+      addMessage("assistant", res.reply, res);
       const isNew = !state.conversationId;
       state.conversationId = res.conversation_id;
       if (res.summary) renderSummary(res.summary);
@@ -319,7 +404,7 @@
       const conv = await api(`/api/conversations/${encodeURIComponent(id)}`);
       loading.remove();
       state.conversationId = conv.id;
-      conv.messages.forEach((m) => addMessage(m.role, m.content));
+      conv.messages.forEach((m) => addMessage(m.role, m.content, m));
       markActiveConversation();
     } catch (e) {
       loading.remove();
@@ -764,8 +849,10 @@
       upload.items.forEach((i) => { i.include = e.target.checked; });
       renderReview();
     });
-    // 지출 내역 탭에 이미지를 끌어다 놓아도 업로드
-    const zone = $("#tab-data");
+    // 어느 탭에서든 상단 버튼으로 바로 업로드
+    $("#uploadCta").addEventListener("click", () => input.click());
+    // 가운데 패널(채팅·지출 내역)에 이미지를 끌어다 놓아도 업로드
+    const zone = $(".panel.center");
     zone.addEventListener("dragover", (e) => { e.preventDefault(); });
     zone.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
   }
@@ -1016,47 +1103,68 @@
     }
     const m = s.metrics;
     const cm = s.current_month || {};
-    const pct = cm.vs_monthly_average_pct;
-    const deltaCls = pct == null ? "muted" : pct > 0 ? "delta-up" : "delta-down";
-    const deltaTxt = pct == null
-      ? (cm.elapsed_days < 7 ? "월초라 월평균 비교는 7일부터 보여드려요" : "")
-      : `월평균 대비 ${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}% (월말 예상 ${manwon(cm.projected_total)})`;
+    const ml = cm.month ? monthLabel(cm.month) : "이번 달";
+    // 지난달 같은 기간(1일~오늘) 대비. 늘어나면 빨강(▲), 줄어들면 초록(▼)
+    const vp = cm.vs_prev_same_period_pct;
+    const vpCls = vp == null ? "muted" : vp > 0 ? "delta-up" : vp < 0 ? "delta-down" : "";
+    const vpTxt = vp == null ? "–" : `${vp > 0 ? "▲" : vp < 0 ? "▼" : ""} ${Math.abs(vp)}%`;
+    const vpSub = cm.prev_same_period_total == null ? "지난달 데이터 없음"
+      : `${monthLabel(cm.prev_month)} 1~${cm.prev_same_period_days}일 ${manwon(cm.prev_same_period_total)}`;
+    const projTxt = cm.projection_ready ? manwon(cm.projected_total) : "–";
+    const projSub = cm.projection_ready ? `월평균 ${manwon(m.monthly_average)}` : "7일부터 계산해요";
     const trendDetail = (s.trend || "").slice(trendWord(s.trend).length).trim().replace(/^\(|\)$/g, "");
+    const open = (k, dflt) => ((state.fold || {})[k] ?? dflt) ? " open" : "";
 
     body.innerHTML = `
+      <div class="kpi-head">
+        <div class="kpi-title">${ml} 소비 현황 <span class="muted">· ${cm.elapsed_days}일 경과</span></div>
+        <div class="kpis">
+          <div class="kpi"><div class="kpi-label">이번 달 지출</div><div class="kpi-value">${manwon(cm.total)}</div><div class="kpi-sub">${won(cm.total)}</div></div>
+          <div class="kpi"><div class="kpi-label">월말 예상</div><div class="kpi-value">${projTxt}</div><div class="kpi-sub">${projSub}</div></div>
+          <div class="kpi"><div class="kpi-label">지난달 대비</div><div class="kpi-value ${vpCls}">${vpTxt}</div><div class="kpi-sub" id="kpiPrevSub"></div></div>
+        </div>
+      </div>
       <div id="goalCard" class="goal-card hidden"></div>
-      <div class="hero">
-        <div class="hero-label">이번 달 (${cm.month}) · ${cm.elapsed_days}일 경과</div>
-        <div class="hero-value">${won(cm.total)}</div>
-        <div class="hero-delta ${deltaCls}">${deltaTxt}</div>
-      </div>
-      <div class="stats">
-        <div><div class="stat-label">기간</div><div class="stat-value small">${s.period}</div></div>
-        <div><div class="stat-label">데이터 개수</div><div class="stat-value">${s.count.toLocaleString()}건</div></div>
-        <div><div class="stat-label">총 지출</div><div class="stat-value">${manwon(m.total)}</div></div>
-        <div><div class="stat-label">월평균</div><div class="stat-value">${manwon(m.monthly_average)}</div></div>
-        <div><div class="stat-label">일평균</div><div class="stat-value">${won(m.daily_average)}</div></div>
-        <div><div class="stat-label">최대 지출</div><div class="stat-value">${manwon(m.max.amount)}</div>
-          <div class="stat-label" id="maxMemo"></div></div>
-      </div>
-      <div class="trend-box">
-        <div class="trend-badge">최근 추세: ${trendWord(s.trend)}</div>
-        <div class="small muted" id="trendDetail"></div>
-      </div>
-      <div class="section-title">월별 지출</div>
-      <div class="chart" id="monthlyChart"></div>
-      <div class="chart-note">점선: 월평균 · 옅은 막대: 진행 중인 달</div>
-      <div class="section-title donut-head">
-        <span>월별 카테고리</span>
-        <span class="month-nav">
-          <button id="donutPrev" class="icon-btn tiny" type="button" aria-label="이전 달">‹</button>
-          <span id="donutMonth"></span>
-          <button id="donutNext" class="icon-btn tiny" type="button" aria-label="다음 달">›</button>
-        </span>
-      </div>
-      <div id="donutChart" class="donut-wrap"></div>
-      <ul id="donutLegend" class="donut-legend"></ul>`;
+      <details class="fold" data-fold="donut"${open("donut", true)}>
+        <summary>카테고리별 지출</summary>
+        <div class="section-title donut-head">
+          <span></span>
+          <span class="month-nav">
+            <button id="donutPrev" class="icon-btn tiny" type="button" aria-label="이전 달">‹</button>
+            <span id="donutMonth"></span>
+            <button id="donutNext" class="icon-btn tiny" type="button" aria-label="다음 달">›</button>
+          </span>
+        </div>
+        <div id="donutChart" class="donut-wrap"></div>
+        <ul id="donutLegend" class="donut-legend"></ul>
+      </details>
+      <details class="fold" data-fold="monthly"${open("monthly", false)}>
+        <summary>월별 지출</summary>
+        <div class="chart" id="monthlyChart"></div>
+        <div class="chart-note">점선: 월평균 · 옅은 막대: 진행 중인 달</div>
+      </details>
+      <details class="fold" data-fold="stats"${open("stats", false)}>
+        <summary>전체 통계 · 최근 추세</summary>
+        <div class="stats">
+          <div><div class="stat-label">기간</div><div class="stat-value small">${s.period}</div></div>
+          <div><div class="stat-label">데이터 개수</div><div class="stat-value">${s.count.toLocaleString()}건</div></div>
+          <div><div class="stat-label">총 지출</div><div class="stat-value">${manwon(m.total)}</div></div>
+          <div><div class="stat-label">월평균</div><div class="stat-value">${manwon(m.monthly_average)}</div></div>
+          <div><div class="stat-label">일평균</div><div class="stat-value">${won(m.daily_average)}</div></div>
+          <div><div class="stat-label">최대 지출</div><div class="stat-value">${manwon(m.max.amount)}</div>
+            <div class="stat-label" id="maxMemo"></div></div>
+        </div>
+        <div class="trend-box">
+          <div class="trend-badge">최근 추세: ${trendWord(s.trend)}</div>
+          <div class="small muted" id="trendDetail"></div>
+        </div>
+      </details>`;
 
+    // 펼침 상태는 새로고침(↻)이나 데이터 변경 후에도 유지
+    body.querySelectorAll("details.fold").forEach((d) => d.addEventListener("toggle", () => {
+      state.fold = { ...(state.fold || {}), [d.dataset.fold]: d.open };
+    }));
+    $("#kpiPrevSub").textContent = vpSub;
     // 서버에서 온 문자열(메모 등)은 textContent로 넣는다.
     $("#maxMemo").textContent = `${m.max.date} · ${m.max.merchant}`;
     $("#trendDetail").textContent = trendDetail;

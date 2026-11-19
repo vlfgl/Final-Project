@@ -101,6 +101,13 @@ def build_summary(rows: list[dict], today: Optional[date] = None) -> dict:
     elapsed = today.day
     projected = round(cur_total / elapsed * _days_in_month(today))
 
+    # 지난달 같은 기간(1일 ~ 오늘 날짜): 진행 중인 달을 끝난 달 전체와 비교하면 무조건 '감소'로 나온다
+    prev_last = today.replace(day=1) - timedelta(days=1)
+    prev_key = prev_last.strftime("%Y-%m")
+    prev_end = prev_last.replace(day=min(elapsed, prev_last.day)).isoformat()
+    prev_same = sum(v for d, v in daily.items() if d.startswith(prev_key) and d <= prev_end)
+    has_prev = prev_key in monthly
+
     top = sorted(by_cat.items(), key=lambda x: x[1], reverse=True)
 
     return {
@@ -124,6 +131,11 @@ def build_summary(rows: list[dict], today: Optional[date] = None) -> dict:
             "projected_total": projected,
             # 비교하지 않는 경우: 비교할 완료된 달이 없을 때, 월초(7일 미만)라 예상치가 불안정할 때
             "vs_monthly_average_pct": _pct(projected, monthly_avg) if full_months and elapsed >= MIN_DAYS_FOR_PROJECTION else None,
+            "projection_ready": elapsed >= MIN_DAYS_FOR_PROJECTION,
+            "prev_month": prev_key,
+            "prev_same_period_days": min(elapsed, prev_last.day),
+            "prev_same_period_total": prev_same if has_prev else None,
+            "vs_prev_same_period_pct": _pct(cur_total, prev_same) if has_prev and prev_same else None,
         },
         "monthly_totals": dict(sorted(monthly.items())),
         "monthly_categories": {
