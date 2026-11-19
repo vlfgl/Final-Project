@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import chat, conversations, goals, me, transactions, uploads
+from app.routers import chat, conversations, goals, insights, me, transactions, uploads
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("spending-coach")
@@ -44,6 +44,7 @@ app.include_router(transactions.router)
 app.include_router(goals.router)
 app.include_router(conversations.router)
 app.include_router(chat.router)
+app.include_router(insights.router)
 
 
 @app.get("/", tags=["health"])

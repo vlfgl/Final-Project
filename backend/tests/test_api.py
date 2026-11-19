@@ -373,4 +373,19 @@ _gp = _at.execute("agentdemo", "get_goal_progress", _json.dumps({"month": cur}))
 _ms = _at.execute("agentdemo", "get_monthly_summary", _json.dumps({"month": cur}))["result"]
 if not _gp["has_goal"]:
     assert _gp["projected_month_end"] == _ms["projected_month_end"] and _gp["spent_so_far"] == _ms["total"], (_gp, _ms)
+# 22) 소비 알림 카드: AI 미사용(모델 호출 0회, 하루 한도 차감 없음), 사용자 분리, 동의 필요
+import unittest.mock as _um
+with _um.patch.object(_cs, "_get_client", side_effect=AssertionError("insights must not call the model")):
+    before = c.get("/api/me", headers=G).json().get("chat_remaining_today")
+    ins = c.get("/api/insights", headers=G); assert ins.status_code == 200, ins.text
+    after = c.get("/api/me", headers=G).json().get("chat_remaining_today")
+assert before == after
+ins = ins.json(); assert len(ins["cards"]) <= 2
+for card in ins["cards"]:
+    assert card["kind"] in ("goal_alert", "overspending") and card["actions"] and all(a["prompt"] for a in card["actions"])
+    assert "을를" not in card["title"] and "원로" not in card["detail"]
+assert c.get("/api/insights", headers=H("mallory")).json()["cards"] == []        # 비교할 3개월 데이터 없음 → 카드 없음
+assert c.get("/api/insights", headers={"Authorization": "Bearer dev:nobody"}).status_code == 403   # 동의 전
+from app.services.insight_service import _j
+assert (_j("배달", "을", "를"), _j("식비", "을", "를"), _j("전체 지출", "이", "가")) == ("배달을", "식비를", "전체 지출이")
 print("ALL TESTS PASSED")

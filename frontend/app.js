@@ -147,6 +147,7 @@
   function showWelcome() {
     messagesEl().innerHTML = `
       <div class="welcome">
+        <div id="insightBox" class="insights hidden" aria-live="polite"></div>
         <p class="welcome-title">무엇이 궁금하세요?</p>
         <div class="chips">
           <button class="chip" type="button">요즘 어디서 돈이 새고 있어?</button>
@@ -156,6 +157,52 @@
         </div>
         <p class="welcome-upload muted small">지출 기록은 위쪽 <b>📷 캡처·영수증으로 지출 추가</b>로 바로 올릴 수 있어요.</p>
       </div>`;
+    renderInsights();
+  }
+
+  // ---------------------------------------------------------------- 소비 알림 카드
+  // 카드 내용은 서버가 코드 규칙(과소비 기준·목표 진행률)으로 만든다. AI는 버튼을 눌렀을 때만 부른다.
+  const insightState = { data: null, dismissed: new Set() };
+
+  async function loadInsights() {
+    try {
+      insightState.data = await api("/api/insights");
+    } catch (e) {
+      insightState.data = null;
+    }
+    renderInsights();
+  }
+
+  function renderInsights() {
+    const box = $("#insightBox");
+    if (!box) return;
+    const cards = ((insightState.data && insightState.data.cards) || []).filter((c) => !insightState.dismissed.has(c.key));
+    box.innerHTML = "";
+    box.classList.toggle("hidden", !cards.length);
+    if (!cards.length) return;
+    const head = el("div", "insight-head");
+    head.append(el("span", "insight-label", "소비 알림"),
+      el("span", "insight-note", "지출 기록을 규칙으로 계산했어요 · 버튼을 누르면 AI 코치가 분석해요"));
+    box.appendChild(head);
+    for (const c of cards) {
+      const card = el("div", `insight-card ${c.level}`);
+      const top = el("div", "insight-top");
+      top.appendChild(el("b", null, c.title));
+      const x = el("button", "icon-btn tiny", "✕");
+      x.type = "button"; x.setAttribute("aria-label", "이 알림 닫기");
+      x.addEventListener("click", () => { insightState.dismissed.add(c.key); renderInsights(); });
+      top.appendChild(x);
+      card.append(top, el("p", "insight-detail", c.detail));
+      const acts = el("div", "insight-actions");
+      c.actions.forEach((a, i) => {
+        const b = el("button", `btn btn-small${i ? " btn-ghost" : ""}`, a.label);
+        b.type = "button";
+        b.addEventListener("click", () => sendMessage(a.prompt));
+        acts.appendChild(b);
+      });
+      card.appendChild(acts);
+      box.appendChild(card);
+    }
   }
 
   // Agent가 부른 도구 인자를 사람이 읽는 말로 (예: "2026-10-01~2026-10-31 · 스타벅스")
@@ -874,6 +921,7 @@
       goalState.view = null;
     }
     renderGoalCard();
+    loadInsights();  // 목표가 바뀌면 '목표 초과' 알림도 달라진다
   }
 
   function el(tag, cls, text) {

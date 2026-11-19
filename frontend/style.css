@@ -491,3 +491,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .tab { padding: 8px 10px; }
 }
 .upload-cta.invisible { visibility: hidden; }
+
+/* ---------- 소비 알림 카드 ---------- */
+.insights { text-align: left; margin-bottom: 22px; display: flex; flex-direction: column; gap: 8px; }
+.insight-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.insight-label { font-size: 13px; font-weight: 800; }
+.insight-note { font-size: 11px; color: var(--muted); }
+.insight-card {
+  border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 10px;
+  background: var(--surface); padding: 12px 12px 10px 14px;
+}
+.insight-card.danger { border-left-color: var(--danger); }
+.insight-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.insight-top b { font-size: 14px; }
+.insight-detail { margin: 4px 0 10px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.insight-actions { display: flex; gap: 6px; flex-wrap: wrap; }
