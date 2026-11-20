@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 
 @router.post("/chat", response_model=ChatResponse,
-             summary="AI 채팅 (데이터 요약 → 시스템 프롬프트 주입 → GPT → 대화 자동 저장)")
+             summary="AI 코치 채팅 (Agent: 도구 선택·조회 → 답변 + 근거·목표 제안, 대화 자동 저장)")
 def chat(payload: ChatRequest, user: CurrentUser = Depends(require_consent)):
     try:
         remaining = user_service.consume_chat_quota(user)
@@ -19,7 +19,9 @@ def chat(payload: ChatRequest, user: CurrentUser = Depends(require_consent)):
     try:
         result = chat_service.chat(user.uid, payload.message, payload.conversation_id)
     except NotFoundError:
+        user_service.refund_chat_quota(user)
         raise HTTPException(404, "해당 대화를 찾을 수 없습니다.")
     except chat_service.ChatError as e:
+        user_service.refund_chat_quota(user)  # AI 호출 실패는 한도에서 빼지 않는다
         raise HTTPException(502, str(e))
     return {**result, "remaining_today": remaining}

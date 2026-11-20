@@ -25,8 +25,11 @@ SCHEMA = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["year", "month", "day", "weekday", "amount", "merchant", "category", "status", "confidence"],
+                "required": ["date_text", "year", "month", "day", "weekday", "amount", "merchant", "category", "status", "confidence"],
                 "properties": {
+                    # 화면에 보이는 날짜 글자 그대로. 코드가 이 글자에서 연·월·일·요일을 다시 읽는다
+                    # (모델이 칸에 '보이지 않는 월'을 채워 넣어도 글자에 없으면 버린다 → FR-07)
+                    "date_text": {"type": ["string", "null"]},
                     # 날짜는 '이미지에 보이는 값'만 칸별로. 안 보이면 null → 날짜 계산은 코드가 한다.
                     "year": {"type": ["integer", "null"]},
                     "month": {"type": ["integer", "null"]},
@@ -61,6 +64,8 @@ PROMPT = """너는 한국 카드·은행·간편결제 앱 화면과 영수증�
 - 할부는 전체 금액. 해외 결제는 원화 금액.
 
 [날짜 — 보이는 것만, 추측 금지]
+- date_text: 그 거래에 해당하는 날짜 글자를 화면에 보이는 그대로 옮겨 적는다(머리글 포함, 시각은 빼도 된다).
+  예: "10.28 (화)", "15일(목)", "2026년 10월 28일", "2026.10.28", "오늘", "어제". 날짜 글자가 없으면 null.
 - year, month, day, weekday는 이미지에 실제로 보이는 값만 적는다. 화면에 없으면 반드시 null.
 - 목록의 날짜 머리글(예: "10.28 (화)", "15일(목)", "2026년 10월")은 그 아래 행에 적용한다.
 - "15일(목)"처럼 일과 요일만 있으면 year=null, month=null, day=15, weekday="목".

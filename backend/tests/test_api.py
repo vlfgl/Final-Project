@@ -388,4 +388,51 @@ assert c.get("/api/insights", headers=H("mallory")).json()["cards"] == []       
 assert c.get("/api/insights", headers={"Authorization": "Bearer dev:nobody"}).status_code == 403   # 동의 전
 from app.services.insight_service import _j
 assert (_j("배달", "을", "를"), _j("식비", "을", "를"), _j("전체 지출", "이", "가")) == ("배달을", "식비를", "전체 지출이")
+
+# 23) FR-07: 화면의 날짜 글자를 코드가 다시 읽는다 — 모델이 보이지 않는 월을 채워도 버린다
+from datetime import date as _d
+from app.services.upload_service import parse_date_text as _pdt, postprocess as _pp
+_T = _d(2026, 11, 20)  # 금요일
+assert _pdt("2026.10.28", _T) == {"year": 2026, "month": 10, "day": 28, "weekday": None}
+assert _pdt("2026년 10월 28일 (수)", _T) == {"year": 2026, "month": 10, "day": 28, "weekday": "수"}
+assert _pdt("10.28 (화)", _T) == {"year": None, "month": 10, "day": 28, "weekday": "화"}
+assert _pdt("11월 3일", _T)["month"] == 11
+assert _pdt("15일(목)", _T) == {"year": None, "month": None, "day": 15, "weekday": "목"}
+assert _pdt("12일 수요일", _T) == {"year": None, "month": None, "day": 12, "weekday": "수"}
+assert _pdt("11.20 14:32", _T)["day"] == 20 and _pdt("14:32", _T) is None   # 시각을 날짜로 읽지 않는다
+assert _pdt("오늘", _T)["day"] == 20 and _pdt("어제 13:02", _T)["day"] == 19
+assert _pdt(None, _T) is None and _pdt("13.45", _T) is None                 # 13월은 날짜가 아니다
+# 모델이 '15일(목)' 행에 month=11을 지어냄 → 11/15는 일요일이라 틀림. 코드는 글자를 다시 읽어 목요일인 15일(10/15)로 정한다
+_raw = {"image_type": "card_statement", "transactions": [
+    {"date_text": "15일(목)", "year": None, "month": 11, "day": 15, "weekday": "목", "amount": 4500,
+     "merchant": "스타벅스", "category": "카페·간식", "status": "spent", "confidence": "high"},
+    {"date_text": "10.28 (화)", "year": None, "month": 10, "day": 28, "weekday": "화", "amount": 12000,
+     "merchant": "김밥천국", "category": "식비", "status": "spent", "confidence": "high"},
+    {"date_text": "2026.11.03", "year": 2026, "month": 11, "day": 3, "weekday": None, "amount": 30000,
+     "merchant": "올리브영", "category": "장보기·생활", "status": "spent", "confidence": "high"},
+    {"date_text": None, "year": None, "month": None, "day": None, "weekday": None, "amount": 5000,
+     "merchant": "날짜없음", "category": "기타", "status": "spent", "confidence": "high"}]}
+_out = _pp(_raw, _T, set(), {})["items"]
+assert [i["date"] for i in _out] == ["2026-10-15", "2025-10-28", "2026-11-03", None], [i["date"] for i in _out]
+assert any("월이 없어" in n for n in _out[0]["notes"]) and _out[0]["include"]
+assert not _out[3]["include"] and any("날짜" in n for n in _out[3]["notes"])
+# 글자가 없으면(구형 응답 호환) 모델이 준 칸을 쓴다
+_old = {"transactions": [{"year": 2026, "month": 11, "day": 3, "weekday": None, "amount": 1000, "merchant": "x",
+                          "category": "기타", "status": "spent", "confidence": "high"}]}
+assert _pp(_old, _T, set(), {})["items"][0]["date"] == "2026-11-03"
+
+# 24) AI 호출이 실패(502)하면 하루 한도를 되돌린다
+from app.services.llm import ChatError as _CE
+_u = "refund-user"; _H = {"Authorization": f"Bearer dev:{_u}"}
+c.post("/api/me/consent", headers=_H)
+def _used(field):
+    from app.db import USERS as _USERS, get_store as _gstore
+    return ((_gstore().get_or_none(_USERS, _u) or {}).get(field) or {}).get("count", 0)
+with patch.object(_cs, "chat", side_effect=_CE("OpenAI 오류")):
+    assert c.post("/api/chat", headers=_H, json={"message": "안녕"}).status_code == 502
+assert _used("chat_usage") == 0
+from app.services import upload_service as _us
+with patch.object(_us, "extract_from_image", side_effect=_CE("Vision 오류")):
+    assert c.post("/api/uploads/extract", headers=_H, json={"data_url": "data:image/png;base64,iVBORw0KGgo="}).status_code == 502
+assert _used("image_usage") == 0
 print("ALL TESTS PASSED")

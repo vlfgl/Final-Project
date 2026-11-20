@@ -19,6 +19,7 @@ def extract(payload: ExtractRequest, user: CurrentUser = Depends(require_consent
     try:
         result = upload_service.extract_from_image(user, payload.data_url)
     except ChatError as e:
+        user_service.refund_image_quota(user)  # 인식 실패는 한도에서 빼지 않는다
         raise HTTPException(502, str(e))
     return {**result, "remaining_today": remaining}
 

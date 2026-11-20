@@ -12,7 +12,7 @@ import {
 
 const cfg = (window.APP_CONFIG && window.APP_CONFIG.FIREBASE_CONFIG) || null;
 if (!cfg || !cfg.apiKey) {
-  throw new Error("FIREBASE_CONFIG가 설정되지 않았습니다. config.js를 확인하세요.");
+  throw new Error("FIREBASE_CONFIG가 설정되지 않았습니다. frontend/config.example.js를 config.js로 복사해 값을 채우세요.");
 }
 
 const app = initializeApp(cfg);

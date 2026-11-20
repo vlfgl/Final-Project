@@ -1,0 +1,16 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Noto Sans CJK KR", "Noto Sans KR", sans-serif; background: #f2f4f6; color: #191f28; width: 390px; }
+.status { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 22px; font-size: 14px; font-weight: 600; }
+.bar { display: flex; align-items: center; gap: 10px; padding: 8px 18px 14px; font-size: 19px; font-weight: 700; }
+.bar .back { font-size: 22px; color: #4e5968; }
+.wm { margin: 0 16px 10px; padding: 6px 10px; border-radius: 8px; background: #fff4e5; color: #b4580b; font-size: 12px; font-weight: 600; text-align: center; }
+.card { background: #fff; margin: 0 12px 12px; border-radius: 16px; padding: 4px 16px; }
+.sum { padding: 16px; } .sum .l { font-size: 13px; color: #6b7684; } .sum .v { font-size: 24px; font-weight: 800; margin-top: 4px; }
+.head { font-size: 13px; color: #6b7684; font-weight: 600; padding: 14px 0 6px; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-top: 1px solid #f2f4f6; }
+.head + .row { border-top: 0; }
+.ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; margin-right: 12px; flex: none; }
+.left { display: flex; align-items: center; }
+.m { font-size: 15px; font-weight: 600; } .s { font-size: 12px; color: #8b95a1; margin-top: 2px; }
+.amt { font-size: 15px; font-weight: 700; text-align: right; } .bal { font-size: 12px; color: #8b95a1; text-align: right; margin-top: 2px; font-weight: 400; }
+.plus { color: #3182f6; }

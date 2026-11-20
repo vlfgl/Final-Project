@@ -52,6 +52,49 @@ def category_rules(uid: str) -> dict[str, str]:
 
 WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 
+_RE_YMD = re.compile(r"(20\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})")
+_RE_YM_KO = re.compile(r"(20\d{2})\s*년\s*(\d{1,2})\s*월")
+_RE_MD_KO = re.compile(r"(\d{1,2})\s*월\s*(\d{1,2})\s*일")
+_RE_MD_NUM = re.compile(r"(?<![\d:])(\d{1,2})\s*[./]\s*(\d{1,2})(?![\d:])")
+_RE_D_KO = re.compile(r"(\d{1,2})\s*일")
+_RE_WD = re.compile(r"([월화수목금토일])\s*(?:요일|\)|）)")
+
+
+def parse_date_text(text: Optional[str], today: date) -> Optional[dict]:
+    """화면에 보인 날짜 글자 → {year, month, day, weekday}. 글자에 없는 값은 None.
+
+    모델이 칸(year/month)에 '보이지 않는 값'을 채워 넣는 경우가 있어서, 글자를 코드가 다시 읽는다.
+    읽을 수 없는 글자면 None을 돌려주고, 그때는 모델이 준 칸 값을 쓴다.
+    """
+    if not text or not text.strip():
+        return None
+    t = text.strip()
+    if t.startswith("오늘"):
+        return {"year": today.year, "month": today.month, "day": today.day, "weekday": None}
+    if t.startswith("어제"):
+        d = today - timedelta(days=1)
+        return {"year": d.year, "month": d.month, "day": d.day, "weekday": None}
+    wm = _RE_WD.search(t)
+    wd = wm.group(1) if wm else None
+    out = {"year": None, "month": None, "day": None, "weekday": wd}
+    if m := _RE_YMD.search(t):
+        out.update(year=int(m.group(1)), month=int(m.group(2)), day=int(m.group(3)))
+    elif m := _RE_MD_KO.search(t):
+        out.update(month=int(m.group(1)), day=int(m.group(2)))
+        if y := _RE_YM_KO.search(t):
+            out["year"] = int(y.group(1))
+    elif m := _RE_MD_NUM.search(t):
+        out.update(month=int(m.group(1)), day=int(m.group(2)))
+    elif m := _RE_D_KO.search(t):
+        out["day"] = int(m.group(1))
+    else:
+        return None
+    if out["month"] is not None and not 1 <= out["month"] <= 12:
+        return None
+    if out["day"] is not None and not 1 <= out["day"] <= 31:
+        return None
+    return out
+
 def resolve_date(year: Optional[int], month: Optional[int], day: Optional[int], today: date,
                  weekday: Optional[str] = None) -> tuple[Optional[str], list[str]]:
     """이미지에 보인 연·월·일·요일 → 날짜. 규칙(코드)으로 정해서 같은 캡처는 항상 같은 날짜가 된다.
@@ -101,7 +144,14 @@ def postprocess(raw: dict, today: date, existing_keys: set, rules: dict[str, str
         merchant = (t.get("merchant") or "").strip()[:100]
         if amount <= 0 or not merchant:
             continue
-        d, notes = resolve_date(t.get("year"), t.get("month"), t.get("day"), today, t.get("weekday"))
+        parsed = parse_date_text(t.get("date_text"), today)
+        src = parsed or {k: t.get(k) for k in ("year", "month", "day", "weekday")}
+        d, notes = resolve_date(src["year"], src["month"], src["day"], today, src["weekday"])
+        if d and not src["month"]:
+            notes.append("화면에 월이 없어 요일이 맞는 가장 가까운 과거 날짜로 정했어요. 확인해 주세요.")
+        elif d and src["year"] and src["month"] and src["weekday"] in WEEKDAYS \
+                and date.fromisoformat(d).weekday() != WEEKDAYS.index(src["weekday"]):
+            notes.append("날짜와 요일이 맞지 않아요. 날짜를 확인해 주세요.")
         category = t.get("category") if t.get("category") in CATEGORIES else "기타"
         category_by = "ai"
         rule = rules.get(norm_merchant(merchant))

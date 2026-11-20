@@ -91,6 +91,23 @@ def _consume(user: CurrentUser, field: str, limit: int) -> int:
     return limit - count - 1
 
 
+def _refund(user: CurrentUser, field: str) -> None:
+    """AI 호출이 실패(502)했거나 요청이 처리되지 않았으면 차감한 1회를 되돌린다."""
+    store = get_store()
+    today = datetime.now(KST).date().isoformat()
+    usage = (store.get_or_none(USERS, user.uid) or {}).get(field) or {}
+    if usage.get("date") == today and usage.get("count", 0) > 0:
+        store.set(USERS, user.uid, {field: {"date": today, "count": usage["count"] - 1}})
+
+
+def refund_chat_quota(user: CurrentUser) -> None:
+    _refund(user, "chat_usage")
+
+
+def refund_image_quota(user: CurrentUser) -> None:
+    _refund(user, "image_usage")
+
+
 def consume_chat_quota(user: CurrentUser) -> int:
     return _consume(user, "chat_usage", settings.DAILY_CHAT_LIMIT)
 

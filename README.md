@@ -37,7 +37,8 @@
 | GET | `/api/goals/{YYYY-MM}/suggestion` | 추천 목표 (최근 3개월 평균, AI 미사용) |
 | GET/POST | `/api/conversations` | 대화 목록 / 저장 |
 | GET/DELETE | `/api/conversations/{id}` | 대화 불러오기 / 삭제 |
-| POST | `/api/chat` | AI 코치 (Agent: 도구 호출 루프, 응답에 trace·actions 포함, 하루 한도) |
+| POST | `/api/chat` | AI 코치 (Agent: 도구 호출 루프, 응답에 trace·actions 포함, 하루 한도, AI 실패 시 한도 환불) |
+| GET | `/api/insights` | 소비 알림 카드 (과소비 규칙·목표 진행률로 계산, AI 미사용, 한도 차감 없음) |
 
 ## 기술 스택
 
@@ -114,7 +115,7 @@ FastAPI ── Authorization: Bearer <ID 토큰> 검증 (firebase_admin) ──�
 
 - `require_user`: 로그인 확인 (`/api/me`, 동의, 삭제)
 - `require_consent`: 로그인 + 동의 확인 (데이터 · AI 기능 전부). 동의 전이면 `403 consent_required` → 프론트가 동의 화면 표시
-- 체험 모드(익명 로그인)는 동의 후 샘플 지출 데이터 667건이 자동으로 채워지고, 로그아웃하면 삭제됨
+- 체험 모드(익명 로그인)는 동의 후 샘플 지출 데이터 605건이 자동으로 채워지고, 로그아웃하면 삭제됨
 - `DELETE /api/me`: 사용자의 모든 데이터 + 프로필 + Firebase 계정 삭제
 
 Swagger(`/docs`)에서 테스트할 때는 우측 상단 **Authorize**에 ID 토큰을 넣는다.
@@ -138,7 +139,7 @@ pip install -r requirements.txt
 cp .env.example .env                                   # 키 채우기
 uvicorn main:app --reload                              # http://127.0.0.1:8000/docs
 
-# 프론트엔드 (frontend/config.js의 FIREBASE_CONFIG를 먼저 채울 것)
+# 프론트엔드 (처음 한 번: frontend/config.example.js를 config.js로 복사해 FIREBASE_CONFIG를 채울 것. config.js는 커밋되지 않음)
 cd frontend
 python -m http.server 5500                             # http://localhost:5500
 ```
