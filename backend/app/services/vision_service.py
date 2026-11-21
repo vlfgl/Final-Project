@@ -14,32 +14,41 @@ from app.services.llm import get_client as _get_client
 
 WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 
+_TX = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["amount", "merchant", "category", "status", "confidence"],
+    "properties": {
+        "amount": {"type": "integer", "description": "거래 금액(원), 양수. 쉼표·부호·원 제외"},
+        "merchant": {"type": "string"},
+        "category": {"type": "string", "enum": list(CATEGORIES)},
+        "status": {"type": "string", "enum": ["spent", "income", "canceled"]},
+        "confidence": {"type": "string", "enum": ["high", "low"]},
+    },
+}
+
+# 거래를 '날짜 묶음(sections)' 안에 넣게 한다. 목록 화면의 날짜 머리글 하나 = 묶음 하나.
+# 행마다 날짜를 따로 고르게 하면 머리글 아래 둘째 행에 윗 머리글 날짜를 붙이는 실수가 있었다(실사용 테스트 3/3).
 SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["image_type", "transactions"],
+    "required": ["image_type", "sections"],
     "properties": {
         "image_type": {"type": "string", "enum": ["card_statement", "transaction_detail", "receipt", "other"]},
-        "transactions": {
+        "sections": {
             "type": "array",
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["date_text", "year", "month", "day", "weekday", "amount", "merchant", "category", "status", "confidence"],
+                "required": ["date_text", "year", "month", "day", "weekday", "transactions"],
                 "properties": {
-                    # 화면에 보이는 날짜 글자 그대로. 코드가 이 글자에서 연·월·일·요일을 다시 읽는다
-                    # (모델이 칸에 '보이지 않는 월'을 채워 넣어도 글자에 없으면 버린다 → FR-07)
+                    # 화면에 보이는 날짜 글자 그대로. 코드가 이 글자에서 연·월·일·요일을 다시 읽는다 (FR-07)
                     "date_text": {"type": ["string", "null"]},
-                    # 날짜는 '이미지에 보이는 값'만 칸별로. 안 보이면 null → 날짜 계산은 코드가 한다.
                     "year": {"type": ["integer", "null"]},
                     "month": {"type": ["integer", "null"]},
                     "day": {"type": ["integer", "null"]},
                     "weekday": {"type": ["string", "null"], "enum": WEEKDAYS + [None]},
-                    "amount": {"type": "integer", "description": "거래 금액(원), 양수. 쉼표·부호·원 제외"},
-                    "merchant": {"type": "string"},
-                    "category": {"type": "string", "enum": list(CATEGORIES)},
-                    "status": {"type": "string", "enum": ["spent", "income", "canceled"]},
-                    "confidence": {"type": "string", "enum": ["high", "low"]},
+                    "transactions": {"type": "array", "items": _TX},
                 },
             },
         },
@@ -63,16 +72,24 @@ PROMPT = """너는 한국 카드·은행·간편결제 앱 화면과 영수증�
 - 거래 금액 자체만 양수 정수로. 잔액, 캐시백, 적립, 할인 예정, 포인트, 한도 금액은 거래 금액이 아니다.
 - 할부는 전체 금액. 해외 결제는 원화 금액.
 
+[날짜 묶음 sections — 화면의 구조를 그대로 옮긴다]
+- 목록 화면에 날짜 머리글(예: "18일(수)", "10.28 (화)")이 있으면 머리글 하나마다 section 하나를 만들고,
+  그 머리글 바로 아래부터 다음 머리글 전까지의 행을 모두 그 section의 transactions에 넣는다.
+  위에서 아래로 순서대로 처리한다. 한 머리글 아래 행이 여러 개여도 모두 같은 section이다.
+- 머리글 없이 행마다 날짜가 적혀 있으면(예: "11.07 (토) 이마트") 행마다 section을 만든다.
+- 영수증·상세 화면은 section 하나에 거래 1건.
+- "2026년 11월"처럼 연·월만 있는 큰 머리글은 section이 아니다. 그 아래 section들의 date_text 앞에 그 글자를 붙인다.
+  예: 큰 머리글 "2026년 11월" 아래 "18일(수)" → date_text="2026년 11월 18일(수)" (둘 다 화면에 보이는 글자다).
+
 [날짜 — 보이는 것만, 추측 금지]
-- date_text: 그 거래에 해당하는 날짜 글자를 화면에 보이는 그대로 옮겨 적는다(머리글 포함, 시각은 빼도 된다).
-  예: "10.28 (화)", "15일(목)", "2026년 10월 28일", "2026.10.28", "오늘", "어제". 날짜 글자가 없으면 null.
+- date_text: 그 section의 날짜 글자를 화면에 보이는 그대로 옮겨 적는다(시각은 빼도 된다).
+  예: "18일(수)", "10.28 (화)", "2026.10.28", "2026-11-19 12:31", "오늘", "어제". 날짜 글자가 없으면 null.
 - year, month, day, weekday는 이미지에 실제로 보이는 값만 적는다. 화면에 없으면 반드시 null.
-- 목록의 날짜 머리글(예: "10.28 (화)", "15일(목)", "2026년 10월")은 그 아래 행에 적용한다.
 - "15일(목)"처럼 일과 요일만 있으면 year=null, month=null, day=15, weekday="목".
 - 연도·월을 계산하거나 추측하지 않는다.
 
 [목록 화면]
-- 각 행이 거래 1건. 합계, 결제 예정 금액, 광고·혜택 배너, 검색·필터 영역은 넣지 않는다.
+- 각 행이 거래 1건(날짜 머리글 줄은 거래가 아니다). 합계, 결제 예정 금액, 광고·혜택 배너, 검색·필터 영역은 넣지 않는다.
 - 화면 위아래에서 잘린 행은 가맹점과 금액이 모두 보일 때만 넣는다.
 
 [영수증·상세 화면]

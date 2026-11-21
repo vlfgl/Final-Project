@@ -136,10 +136,26 @@ def resolve_date(year: Optional[int], month: Optional[int], day: Optional[int], 
     return None, ["날짜를 확정할 수 없어요. 직접 입력해 주세요."]
 
 
+_DATE_KEYS = ("date_text", "year", "month", "day", "weekday")
+
+
+def _rows_from(raw: dict) -> list[dict]:
+    """sections(날짜 묶음) → 거래 행 목록. 각 행에 묶음의 날짜 정보를 붙인다.
+    예전 형식(transactions에 행마다 날짜)도 그대로 받는다."""
+    if "sections" in raw:
+        rows = []
+        for sec in raw.get("sections") or []:
+            date_info = {k: sec.get(k) for k in _DATE_KEYS}
+            for t in sec.get("transactions") or []:
+                rows.append({**t, **date_info})
+        return rows
+    return list(raw.get("transactions") or [])
+
+
 def postprocess(raw: dict, today: date, existing_keys: set, rules: dict[str, str]) -> dict:
     items = []
     seen = set()
-    for t in raw.get("transactions", []):
+    for t in _rows_from(raw):
         amount = int(t.get("amount") or 0)
         merchant = (t.get("merchant") or "").strip()[:100]
         if amount <= 0 or not merchant:
