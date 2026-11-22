@@ -52,7 +52,7 @@ with patch.object(chat_service, "_get_client", side_effect=fake_client):
     r = c.post("/api/chat", headers=H("alice"), json={"message": "4"}); assert r.status_code == 429, r.text
     assert len(c.get("/api/conversations", headers=H("alice")).json()) == 3
 
-# 6) 체험(익명) 계정: 동의 → 샘플 데이터 667건, 두 번 호출해도 중복 없음, 일반 계정은 불가
+# 6) 체험(익명) 계정: 동의 → 샘플 데이터 605건, 두 번 호출해도 중복 없음, 일반 계정은 불가
 c.post("/api/me/consent", headers=ANON)
 assert c.get("/api/me", headers=ANON).json()["is_anonymous"] is True
 assert c.post("/api/me/demo", headers=ANON).json()["seeded"] == 605
@@ -435,4 +435,21 @@ from app.services import upload_service as _us
 with patch.object(_us, "extract_from_image", side_effect=_CE("Vision 오류")):
     assert c.post("/api/uploads/extract", headers=_H, json={"data_url": "data:image/png;base64,iVBORw0KGgo="}).status_code == 502
 assert _used("image_usage") == 0
+
+# 25) 날짜 묶음(sections): 머리글 아래 모든 행이 그 머리글 날짜를 받는다 (실사용 테스트: 카카오T 택시가 3/3 윗 머리글로 잡힘)
+_sec = {"image_type": "card_statement", "sections": [
+    {"date_text": "18일(수)", "year": None, "month": None, "day": 18, "weekday": "수", "transactions": [
+        {"amount": 4800, "merchant": "스타벅스 역삼점", "category": "카페·간식", "status": "spent", "confidence": "high"},
+        {"amount": 23000, "merchant": "배달의민족", "category": "배달", "status": "spent", "confidence": "high"}]},
+    {"date_text": "17일(화)", "year": None, "month": None, "day": 17, "weekday": "화", "transactions": [
+        {"amount": 3200, "merchant": "GS25 선릉역점", "category": "장보기·생활", "status": "spent", "confidence": "high"},
+        {"amount": 12400, "merchant": "카카오T 택시", "category": "교통", "status": "spent", "confidence": "high"}]},
+    {"date_text": "2026년 11월 15일(일)", "year": 2026, "month": 11, "day": 15, "weekday": "일", "transactions": [
+        {"amount": 59000, "merchant": "무신사", "category": "쇼핑", "status": "spent", "confidence": "high"}]}]}
+_o = _pp(_sec, _T, set(), {})["items"]
+assert [(i["merchant"], i["date"]) for i in _o] == [("스타벅스 역삼점", "2026-11-18"), ("배달의민족", "2026-11-18"),
+    ("GS25 선릉역점", "2026-11-17"), ("카카오T 택시", "2026-11-17"), ("무신사", "2026-11-15")], _o
+assert not any("월이 없어" in n for n in _o[4]["notes"])   # 큰 머리글로 월이 보였으면 추측 안내를 붙이지 않는다
+from app.services import vision_service as _vs
+assert "sections" in _vs.SCHEMA["required"] and "transactions" not in _vs.SCHEMA["properties"]
 print("ALL TESTS PASSED")
