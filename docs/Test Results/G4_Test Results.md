@@ -27,20 +27,20 @@
 
 ## 화면 증거
 
-### A3 — 이미지 인식 (`run1_A3.png`)
-![run1_A3](../docs/images/g4/run1_A3.png)
+### A3 — 이미지 인식 (`A3.png`)
+![A3](..docs/Test Results/g4_images/A3.png)
 
-### A4 — 날짜 규칙 (`run1_A4.png`)
-![run1_A4](../docs/images/g4/run1_A4.png)
+### A4 — 날짜 규칙 (`A4.png`)
+![A4](..docs/Test Results/g4_images/A4.png)
 
-### A14 — AI 코치 채팅 (`run1_A14.png`)
-![run1_A14](../docs/images/g4/run1_A14.png)
+### A14 — AI 코치 채팅 (`A14.png`)
+![A14](..docs/Test Results/g4_images/A14.png)
 
-### A15 — Agent 도구 호출: 거래 검색 (`run1_A15.png`)
-![run1_A15](../docs/images/g4/run1_A15.png)
+### A15 — Agent 도구 호출: 거래 검색 (`A15.png`)
+![A15](..docs/Test Results/g4_images/A15.png)
 
-### A16 — 과소비 탐지 (`run1_A16.png`)
-![run1_A16](../docs/images/g4/run1_A16.png)
+### A16 — 과소비 탐지 (`A16.png`)
+![A16](..docs/Test Results/g4_images/A16.png)
 
-### A17 — Agent 도구 호출: 절약 목표 제안 (`run1_A17.png`)
-![run1_A17](../docs/images/g4/run1_A17.png)
+### A17 — Agent 도구 호출: 절약 목표 제안 (`A17.png`)
+![A17](..docs/Test Results/g4_images/A17.png)
