@@ -116,7 +116,7 @@
         <div class="upload-bar">
           <div class="upload-main">
             <div class="upload-title">📷 카드 내역 캡처 · 영수증으로 지출 추가</div>
-            <div class="muted small">카드·은행 앱의 거래 내역(목록·상세) 캡처나 영수증 사진을 올리세요. 여러 장 한 번에, 끌어다 놓아도 돼요.</div>
+            <div class="muted small">카드·은행 앱의 거래 내역(목록·상세) 캡처나 영수증 사진을 올리세요. 여러 장 한 번에, 끌어다 놓아도 돼요. (JPG·PNG·WEBP, 아이폰 사진 원본 HEIC는 JPG로 바꿔서)</div>
             <ol class="upload-steps" aria-label="처리 순서">
               <li>이미지 올리기</li>
               <li>AI가 날짜·금액·가맹점·카테고리 추출</li>
@@ -134,7 +134,7 @@
         <form id="dataForm" class="data-form">
           <input type="hidden" id="dataId" />
           <label>날짜<input type="date" id="txDate" required /></label>
-          <label>금액(원)<input type="number" id="txAmount" min="1" max="100000000" step="1" required placeholder="5600" /></label>
+          <label>금액(원)<input type="text" inputmode="numeric" id="txAmount" required placeholder="5,600" /></label>
           <label class="grow">가맹점<input type="text" id="txMerchant" maxlength="100" required placeholder="스타벅스 강남역점" /></label>
           <label>카테고리
             <select id="txCategory">
@@ -215,7 +215,7 @@
         <span id="goalSuggestInfo" class="muted small">최근 3개월 지출 평균을 바탕으로 계산해요.</span>
       </div>
       <label class="goal-field">월 총예산 (원)
-        <input type="number" id="goalTotal" min="1" max="100000000" step="10000" placeholder="1500000" />
+        <input type="text" inputmode="numeric" id="goalTotal" placeholder="1,500,000" />
         <span id="goalTotalHint" class="muted small"></span>
       </label>
       <div class="goal-field">

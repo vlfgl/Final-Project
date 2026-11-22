@@ -7,6 +7,27 @@
   const won = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
   const manwon = (n) => (n >= 10000 ? `${(n / 10000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}만원` : won(n));
 
+  // ---------------------------------------------------------------- 금액 입력칸: 쉼표 자동 표시
+  // type="number"는 쉼표를 넣을 수 없어 큰 금액(2,300,000 등)을 확인하기 어렵다 → 글자 칸 + 입력할 때마다 쉼표
+  const moneyValue = (inp) => Number(String(inp.value).replace(/[^\d]/g, "")) || 0;  // 비었으면 0
+  const setMoney = (inp, n) => { inp.value = n === "" || n == null || !Number(n) ? "" : Number(n).toLocaleString("ko-KR"); };
+  function bindMoney(inp) {
+    inp.type = "text";
+    inp.inputMode = "numeric";  // 휴대폰에서 숫자 키패드
+    inp.autocomplete = "off";
+    inp.classList.add("money");
+    inp.addEventListener("input", () => {
+      // 커서 앞의 숫자 개수를 기억했다가, 쉼표를 다시 찍은 뒤 같은 숫자 뒤로 커서를 돌려놓는다
+      const digitsBefore = inp.value.slice(0, inp.selectionStart ?? inp.value.length).replace(/[^\d]/g, "").length;
+      const digits = inp.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "").slice(0, 9);  // 최대 9자리(1억 원 미만~)
+      inp.value = digits ? Number(digits).toLocaleString("ko-KR") : "";
+      let pos = 0, seen = 0;
+      while (pos < inp.value.length && seen < digitsBefore) { if (/\d/.test(inp.value[pos])) seen++; pos++; }
+      try { inp.setSelectionRange(pos, pos); } catch (_) { /* 일부 브라우저는 text가 아닐 때 예외 */ }
+    });
+    return inp;
+  }
+
   let Auth = null; // auth.js 모듈 (Firebase). init에서 동적으로 불러온다.
 
   const state = {
@@ -576,7 +597,7 @@
   function startEdit(r) {
     $("#dataId").value = r.id;
     $("#txDate").value = r.date;
-    $("#txAmount").value = r.amount;
+    setMoney($("#txAmount"), r.amount);
     $("#txMerchant").value = r.merchant;
     const sel = $("#txCategory");
     sel.value = [...sel.options].some((o) => o.value === r.category) ? r.category : "기타";
@@ -603,7 +624,7 @@
     e.preventDefault();
     const id = $("#dataId").value;
     const date = $("#txDate").value;
-    const amount = Number($("#txAmount").value);
+    const amount = moneyValue($("#txAmount"));
     const merchant = $("#txMerchant").value.trim();
     if (!date) return setFormMessage("날짜를 입력해 주세요.", "err");
     if (!Number.isInteger(amount) || amount <= 0 || amount > 100000000) {
@@ -675,7 +696,7 @@
   }
 
   // ---------------------------------------------------------------- 이미지 인식 (카드 내역 캡처 · 영수증)
-  const upload = { items: [], busy: false };
+  const upload = { items: [], busy: false, thumbUrls: [] };
   const SOURCE_ICON = {
     screenshot: ["📷", "카드 내역 캡처에서 인식"],
     receipt: ["🧾", "영수증 사진에서 인식"],
@@ -701,12 +722,23 @@
         URL.revokeObjectURL(url);
         resolve(canvas.toDataURL("image/jpeg", 0.85));
       };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("이미지를 열 수 없어요. (HEIC 등은 JPG/PNG로 바꿔 주세요)")); };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("이미지를 열 수 없어요. JPG·PNG·WEBP 형식으로 올려 주세요.")); };
       img.src = url;
     });
   }
 
+  // 아이폰 카메라 원본(HEIC/HEIF)은 Chrome 등 대부분의 브라우저가 열지 못한다 → 시도하지 않고 바로 안내
+  const isHeic = (f) => /image\/hei[cf]/i.test(f.type) || /\.(heic|heif)$/i.test(f.name);
+  const HEIC_MSG = "아이폰 사진 원본(HEIC)은 아직 지원하지 않아요. 사진 앱에서 공유 → 'JPEG로' 저장하거나, 화면 캡처(PNG)로 올려 주세요.";
+
+  // 진행 목록 썸네일용 임시 주소: 창을 닫거나 새로 열 때 해제해 메모리가 쌓이지 않게 한다
+  function releaseThumbs() {
+    (upload.thumbUrls || []).forEach((u) => URL.revokeObjectURL(u));
+    upload.thumbUrls = [];
+  }
+
   function openUploadModal() {
+    releaseThumbs();
     $("#uploadProgress").innerHTML = "";
     $("#reviewSection").classList.add("hidden");
     $("#reviewBody").innerHTML = "";
@@ -718,10 +750,11 @@
     if (upload.busy) return;
     $("#uploadModal").classList.add("hidden");
     upload.items = [];
+    releaseThumbs();
   }
 
   async function handleFiles(fileList) {
-    const files = [...fileList].filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+    const files = [...fileList].filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
     if (!files.length) return;
     if (files.length > 10) { toast("한 번에 최대 10장까지 올릴 수 있어요."); return; }
     openUploadModal();
@@ -729,9 +762,15 @@
     upload.items = [];
     const rows = files.map((f) => {
       const li = document.createElement("li");
-      const thumb = document.createElement("img");
-      thumb.src = URL.createObjectURL(f);
-      thumb.alt = "";
+      let thumb;
+      if (isHeic(f)) {
+        thumb = el("span", "thumb-ph", "📷");  // 미리보기를 만들 수 없는 형식
+      } else {
+        thumb = document.createElement("img");
+        thumb.src = URL.createObjectURL(f);
+        upload.thumbUrls.push(thumb.src);
+        thumb.alt = "";
+      }
       const name = document.createElement("span");
       name.textContent = f.name;
       const st = document.createElement("span");
@@ -744,6 +783,11 @@
 
     for (let i = 0; i < files.length; i++) {
       const st = rows[i];
+      if (isHeic(files[i])) {
+        st.className = "state err";
+        st.textContent = `✗ ${HEIC_MSG}`;
+        continue;
+      }
       st.textContent = "AI가 읽는 중…";
       try {
         const dataUrl = await resizeImage(files[i]);
@@ -827,8 +871,9 @@
       merchant.type = "text"; merchant.maxLength = 100; merchant.value = it.merchant;
       merchant.addEventListener("input", () => { it.merchant = merchant.value; });
       const amount = document.createElement("input");
-      amount.type = "number"; amount.min = 1; amount.step = 1; amount.value = it.amount;
-      amount.addEventListener("input", () => { it.amount = Number(amount.value); });
+      bindMoney(amount); setMoney(amount, it.amount);
+      amount.setAttribute("aria-label", "금액(원)");
+      amount.addEventListener("input", () => { it.amount = moneyValue(amount); updateReviewCount(); });
       const cat = categoryOptions(it.category);
       cat.addEventListener("change", () => { it.category = cat.value; it.category_by = "user"; });
 
@@ -1008,7 +1053,7 @@
     const row = el("div", "limit-row");
     const sel = categoryOptions(category);
     const inp = document.createElement("input");
-    inp.type = "number"; inp.min = 1; inp.step = 5000; inp.placeholder = "한도(원)"; inp.value = limit;
+    bindMoney(inp); inp.placeholder = "한도(원)"; setMoney(inp, limit);
     const del = el("button", "link-btn danger", "삭제");
     del.type = "button";
     del.addEventListener("click", () => { row.remove(); updateLimitButton(); });
@@ -1020,7 +1065,7 @@
     $("#goalAddLimit").classList.toggle("hidden", $("#goalLimits").children.length >= 3);
   }
   function updateTotalHint() {
-    const v = Number($("#goalTotal").value);
+    const v = moneyValue($("#goalTotal"));
     $("#goalTotalHint").textContent = v > 0 ? `= ${manwon(v)}` : "";
   }
 
@@ -1032,7 +1077,7 @@
     $("#goalMsg").textContent = "";
     $("#goalSuggestInfo").textContent = "최근 3개월 지출 평균을 바탕으로 계산해요.";
     $("#goalLimits").innerHTML = "";
-    $("#goalTotal").value = v.goal ? v.goal.total_budget : "";
+    setMoney($("#goalTotal"), v.goal ? v.goal.total_budget : "");
     (v.goal ? v.goal.category_limits : []).forEach((c) => $("#goalLimits").appendChild(limitRow(c.category, c.limit)));
     updateLimitButton();
     updateTotalHint();
@@ -1056,7 +1101,7 @@
     try {
       const s = await api(`/api/goals/${goalState.view.month}/suggestion`);
       if (!s.available) { $("#goalSuggestInfo").textContent = s.reason; return; }
-      $("#goalTotal").value = s.total_budget;
+      setMoney($("#goalTotal"), s.total_budget);
       $("#goalLimits").innerHTML = "";
       s.category_limits.forEach((c) => $("#goalLimits").appendChild(limitRow(c.category, c.limit, c.average)));
       updateLimitButton();
@@ -1071,11 +1116,11 @@
   }
 
   async function saveGoal() {
-    const total = Number($("#goalTotal").value);
+    const total = moneyValue($("#goalTotal"));
     if (!Number.isInteger(total) || total <= 0) { $("#goalMsg").textContent = "월 총예산을 입력해 주세요."; return; }
     const limits = [...$("#goalLimits").children].map((row) => ({
       category: row.querySelector("select").value,
-      limit: Number(row.querySelector("input").value),
+      limit: moneyValue(row.querySelector("input")),
     }));
     if (limits.some((l) => !Number.isInteger(l.limit) || l.limit <= 0)) { $("#goalMsg").textContent = "카테고리 한도 금액을 입력해 주세요."; return; }
     const btn = $("#goalSave");
@@ -1110,6 +1155,8 @@
     $("#goalSave").addEventListener("click", saveGoal);
     $("#goalDelete").addEventListener("click", deleteGoal);
     $("#goalSuggestBtn").addEventListener("click", applySuggestion);
+    bindMoney($("#goalTotal"));
+    bindMoney($("#txAmount"));
     $("#goalTotal").addEventListener("input", updateTotalHint);
     $("#goalAddLimit").addEventListener("click", () => {
       const used = new Set([...$("#goalLimits").querySelectorAll("select")].map((s) => s.value));
