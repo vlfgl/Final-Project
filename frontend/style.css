@@ -506,3 +506,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .insight-top b { font-size: 14px; }
 .insight-detail { margin: 4px 0 10px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .insight-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.thumb-ph { display: inline-grid; place-items: center; width: 36px; height: 48px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); font-size: 16px; flex: none; }
+/* 확인 표: 칸이 좁아 금액이 잘려 보이던 문제(2,300,000 → "23000"처럼 보임) 수정 */
+.review-table td.c-amount input { min-width: 12ch; text-align: right; font-variant-numeric: tabular-nums; }
+.review-table td.c-date input { min-width: 136px; }
+.review-table td.c-cat select { min-width: 112px; }
+.review-table td:last-child { min-width: 220px; } .review-table td:last-child .badge { white-space: normal; line-height: 1.4; }
+input.money { text-align: right; font-variant-numeric: tabular-nums; }
+.review-table td.c-amount input, .review-table input.money { min-width: 12ch; }
