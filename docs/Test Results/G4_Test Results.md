@@ -28,19 +28,19 @@
 ## 화면 증거
 
 ### A3 — 이미지 인식 (`A3.png`)
-![A3](../docs/Test%20Results/g4_images/A3.png)
+![A3](/docs/Test%20Results/g4_images/A3.png)
 
 ### A4 — 날짜 규칙 (`A4.png`)
-![A4](../docs/Test%20Results/g4_images/A4.png)
+![A4](/docs/Test%20Results/g4_images/A4.png)
 
 ### A14 — AI 코치 채팅 (`A14.png`)
-![A14](../docs/Test%20Results/g4_images/A14.png)
+![A14](/docs/Test%20Results/g4_images/A14.png)
 
 ### A15 — Agent 도구 호출: 거래 검색 (`A15.png`)
-![A15](../docs/Test%20Results/g4_images/A15.png)
+![A15](/docs/Test%20Results/g4_images/A15.png)
 
 ### A16 — 과소비 탐지 (`A16.png`)
-![A16](../docs/Test%20Results/g4_images/A16.png)
+![A16](/docs/Test%20Results/g4_images/A16.png)
 
 ### A17 — Agent 도구 호출: 절약 목표 제안 (`A17.png`)
-![A17](../docs/Test%20Results/g4_images/A17.png)
+![A17](/docs/Test%20Results/g4_images/A17.png)
