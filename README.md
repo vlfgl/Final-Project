@@ -1,166 +1,92 @@
 # AI 소비 패턴 분석 및 절약 코치
 
-카드 내역이나 영수증을 올리면 AI가 소비 패턴을 분석하고, 매달 절약 목표를 함께 관리해 주는 개인 절약 코치.
+## 프로젝트 소개
+카드·은행 앱 캡처나 영수증을 올리면 AI가 날짜·금액·가맹점·카테고리를 읽어 지출을 정리하고,
+이번 달 지출·월말 예상·지난달 같은 기간 대비와 카테고리별 차트, 과소비 알림 카드로 소비 패턴을 보여주는 서비스입니다.
+AI 코치(AI Agent)는 질문에 맞는 지출 데이터를 직접 조회해 근거와 함께 절약 방법을 답하고, 월 목표를 제안하면 사용자가 [적용]으로 반영합니다.
 
-> 진행 중. 현재 구현: **로그인(Google · 체험 모드) · 개인정보 동의 · 사용자별 데이터 분리 · 내 데이터 삭제 · 하루 채팅 제한 · 거래 CRUD · **이미지 인식(카드 내역 캡처·영수증)** · 소비 요약 · 월 절약 목표 · **AI Agent 코치(도구 호출)** · 대화 기록**
 
-## 데이터 모델
-
-`users/{uid}/transactions/{id}` — 결제 1건
-
-| 필드 | 설명 | 예시 |
-|---|---|---|
-| `date` | 결제일 | `"2026-10-28"` |
-| `amount` | 금액(원, 양의 정수) | `5600` |
-| `merchant` | 가맹점 | `"스타벅스 강남역점"` |
-| `category` | 고정 목록 중 하나: 식비 · 배달 · 카페·간식 · 장보기·생활 · 교통 · 쇼핑 · 주거·통신 · 구독 · 문화·여가 · 의료·건강 · 교육 · 기타 | `"카페·간식"` |
-| `source` | 입력 경로: `manual` · `screenshot` · `receipt` · `sample` | `"screenshot"` |
-| `category_by` | 분류 주체: `ai` · `user` (사용자가 고친 분류는 이후 자동 분류에 반영 예정) | `"ai"` |
-| `memo`, `created_at` | 메모(선택), 저장 시각 | |
-
-## API
-
-| Method | Path | 설명 |
-|---|---|---|
-| GET | `/api/me` | 내 정보 + 동의 여부 |
-| POST | `/api/me/consent` | 개인정보·AI 처리 동의 |
-| DELETE | `/api/me` | 내 데이터 전체 + 계정 삭제 |
-| POST | `/api/me/demo` | 체험 계정에 샘플 데이터(6개월, 605건) 채우기 |
-| POST | `/api/uploads/extract` | 이미지 1장 → 거래 후보 추출 (저장 안 함, 하루 한도) |
-| POST | `/api/transactions/bulk` | 확인한 거래 일괄 저장 (최대 300건) |
-| GET | `/api/transactions/categories` | 카테고리 목록 |
-| GET | `/api/transactions/summary` | 소비 요약 (이번 달은 오늘 기준, 월초 7일간은 월평균 비교 생략, 월별 카테고리 합계 포함) |
-| GET/POST | `/api/transactions` | 거래 목록(`start`, `end`, `limit`, `order`) / 직접 추가 |
-| PUT/DELETE | `/api/transactions/{id}` | 거래 수정(부분) / 삭제 |
-| GET | `/api/goals/{YYYY-MM}` | 월 목표 + 진행률·페이스 (없으면 이전 달 목표 이어받음) |
-| PUT/DELETE | `/api/goals/{YYYY-MM}` | 월 목표 저장(변경 이력 기록) / 해제 — 지난 달은 불가 |
-| GET | `/api/goals/{YYYY-MM}/suggestion` | 추천 목표 (최근 3개월 평균, AI 미사용) |
-| GET/POST | `/api/conversations` | 대화 목록 / 저장 |
-| GET/DELETE | `/api/conversations/{id}` | 대화 불러오기 / 삭제 |
-| POST | `/api/chat` | AI 코치 (Agent: 도구 호출 루프, 응답에 trace·actions 포함, 하루 한도, AI 실패 시 한도 환불) |
-| GET | `/api/insights` | 소비 알림 카드 (과소비 규칙·목표 진행률로 계산, AI 미사용, 한도 차감 없음) |
+## 팀원 및 역할
+| 이름 | 역할 | 담당 업무 |
+|------|------|-----------|
+| 박채원 | Backend/DB | 프로젝트 관리, FastAPI API·Firestore 설계, 로그인·보안, 통합 및 배포 확인 |
+| 안소연 | Frontend | 대시보드·업로드·채팅 화면 구현, UI/UX 설계, 실사용자 테스트 진행·피드백 정리 |
+| 곽승렬 | AI Agent/Data | AI Agent 도구·프롬프트 설계, 소비 분석 로직, Agent 정량 평가, 필수 기능 3회 검증 |
 
 ## 기술 스택
+- **AI**: OpenAI gpt-4o-mini (Vision + Structured Outputs, Function Calling)
+- **Backend**: Python 3.12, FastAPI, Pydantic, Render
+- **Frontend**: HTML, CSS, JavaScript (ES 모듈, SVG 차트 직접 구현), Vercel
+- **DB · 인증**: Firebase Firestore, Firebase Authentication (Google, 익명 체험 모드)
+- **운영**: UptimeRobot (무료 서버 잠듦 방지, 10분 간격 `/health` 확인)
+- **테스트**: FastAPI TestClient + 메모리 DB, Playwright, Agent 정량 평가 스크립트
 
-| 영역 | 기술 |
-|---|---|
-| Backend | Python 3.12, FastAPI, Pydantic |
-| DB / 인증 | Firebase Firestore, Firebase Authentication (Google, 익명) |
-| AI | OpenAI API (gpt-4o-mini) |
-| Frontend | HTML / CSS / JavaScript (ES 모듈), Firebase JS SDK (CDN) |
-| 배포 | Render (백엔드), Vercel (프론트엔드) |
+## 시스템 아키텍처
+![시스템 아키텍처](docs/images/system_architecture.png)
 
-## 이미지 인식 흐름 (멀티모달 AI)
+## 핵심 AI 활용
 
-```
-[이미지 여러 장 선택] → 브라우저에서 축소(JPEG) → 1장씩 POST /api/uploads/extract
-   → Vision 모델: 이미지 종류 판별 + 거래 목록 + 카테고리 (Structured Outputs로 JSON 형식 강제)
-   → 코드 후처리: 연도 보정 · 취소 제외 · 기존 거래와 중복 표시 · 사용자가 고친 가맹점 분류 규칙 적용
-[확인 표] 날짜·가맹점·금액·카테고리 수정, 체크 → POST /api/transactions/bulk
-```
+### 1. 멀티모달 AI — 캡처·영수증 인식
+- 이미지 1장 → gpt-4o-mini Vision이 정해진 JSON 형식(Structured Outputs)으로 거래 후보 추출
+- 화면의 날짜 머리글별로 거래를 묶어 받고, 날짜 글자("18일(수)")는 코드가 다시 해석
+  → 화면에 없는 연도·월은 요일이 맞는 가장 가까운 과거 날짜로 정하고 "확인해 주세요" 메모 표시
+- 사용자가 확인 표에서 고친 뒤 저장 (원본 이미지는 저장하지 않음), 이미지 간 중복 자동 표시
+- 결과: 샘플 이미지 3장 3회 반복 모두 기대 결과와 일치 (개선 전 카드 목록 1건 3회 모두 오답)
 
-- **AI는 읽기만, 판단은 코드가**: 연도 추정 오류·중복·취소 처리를 규칙으로 처리해 결과가 일관되고 테스트 가능함
-- **원본 이미지는 저장하지 않음**: 추출된 거래 정보만 저장 (동의서 내용과 일치)
-- **사람 확인 단계**: 흐릿하게 읽힌 값·날짜 없는 행·중복·취소는 표시되고 기본 체크 해제
-- 겹치게 찍은 캡처 간 중복은 프론트에서 한 번 더 표시
+### 2. AI Agent — 절약 코치
+- Function Calling 반복 루프: 질문에 필요한 도구를 **7개 중 직접 골라** 조회하고 결과로 답변
+  (거래 검색, 월 요약, 두 달 비교, 카테고리 추이, 과소비 탐지, 목표 진행 상황, 목표 변경 제안 / 최대 5단계, 단계당 최대 4회 호출)
+- 답변 전 스스로 점검(self-check), 조회 근거(trace)를 화면에 함께 표시
+- 목표는 **제안만** 하고 사용자가 [적용]을 눌러야 저장, 이미 쓴 금액보다 낮은 한도는 제안하지 않음
+- 결과(질문 15개, 3회 반복): 도구 선택 15/15, 정답 일치 **이전 방식 5/10 → Agent 10/10**, 지어낸 숫자 0건
 
-## AI Agent (절약 코치)
+## 실행 방법
+### 요구사항
+- Python 3.12
+- OpenAI API 키, Firebase 프로젝트(Firestore·Authentication, 서비스 계정 키)
+- 프론트엔드는 빌드 도구가 없어 Node.js 불필요
 
-모델이 질문을 보고 **어떤 도구를, 어떤 인자로, 몇 번 부를지 스스로 정한다** (OpenAI Function Calling 루프). 코드에는 "이 질문이면 이 도구" 같은 분기가 없다.
-
-```
-질문 → [모델] 필요한 도구 선택 → [코드] 실행(본인 데이터만, 인자 검증) → 결과를 모델에 전달
-     → [모델] 결과를 보고 추가 조회 or 답변 (최대 5단계) → 답변 + 근거(trace) + 제안(actions)
-```
-
-| 도구 | 하는 일 |
-|---|---|
-| `search_transactions` | 기간·가맹점·카테고리·금액으로 거래 검색 → 건수·합계·가맹점별 |
-| `get_monthly_summary` | 한 달 총지출·카테고리 비중·지난달 대비·월말 예상 |
-| `compare_months` | 두 달 카테고리별 증감 |
-| `get_category_trend` | 카테고리 최근 N개월 추이 |
-| `detect_overspending` | 규칙 기반 과소비 탐지(직전 3개월 평균 대비 130%↑ & 2만 원↑) + 목표 초과 |
-| `get_goal_progress` | 목표·사용률·월말 예상 (없으면 추천값) |
-| `propose_goal` | 목표 변경 **제안만** (저장은 사용자가 화면에서 [적용]) |
-
-- 답변의 숫자는 그 대화에서 받은 도구 결과에서만 쓰도록 시스템 프롬프트로 제한, 화면에 **근거(어떤 도구로 무엇을 확인했는지)** 표시
-- 안전장치: 최대 5단계, 읽기 전용 도구, uid는 서버가 주입, 잘못된 인자는 error로 돌려 모델이 고쳐 재호출, 질문 1개 = 하루 한도 1회
-- 이전 방식(요약 주입)은 `COACH_MODE=baseline`으로 남겨 비교 평가에 사용
-- 코드: `backend/app/services/agent_tools.py`(도구), `chat_service.py`의 `run_agent()`(루프)
-
-### 평가
-
+### 설치 및 실행
 ```bash
-cd backend && python -m eval.agent_eval      # 실제 GPT 사용, 1회 약 100원
-```
-질문 15개로 ① 도구 선택 정확도 ② 정답 일치(정답은 코드로 계산) ③ 숫자 근거율(지어낸 숫자 탐지)을 재고, 같은 질문을 baseline과 비교한다. 결과는 `backend/eval/results/`에 저장.
+git clone <저장소 주소>
+cd <저장소 폴더>
 
-## 월 절약 목표
-
-- `users/{uid}/goals/{YYYY-MM}`: 총예산 + 카테고리 한도(최대 3개) + 변경 이력
-- 목표가 없는 달은 가장 최근 목표를 **이어서 적용**(저장은 사용자가 할 때만), 지난 달은 수정 불가(기록 보존)
-- 진행률·월말 예상·남은 날 하루 사용 가능 금액은 코드로 계산. 상태: 목표 안쪽 / 초과 예상 / 초과
-- 추천: 최근 3개월 평균에서 총예산 −10%, 고정비(주거·통신·구독·교육·의료)를 뺀 상위 3개 카테고리 −15%
-- AI 코치 시스템 프롬프트에 이번 달 목표와 진행 상황을 함께 넣어 목표 기준으로 조언
-
-## 인증 구조
-
-```
-브라우저 ──(Google 로그인 / 익명 체험)──▶ Firebase Auth
-   │  ID 토큰 (1시간, SDK가 자동 갱신)
-   ▼
-FastAPI ── Authorization: Bearer <ID 토큰> 검증 (firebase_admin) ──▶ uid
-   └─ users/{uid}/transactions, users/{uid}/conversations 만 접근
-```
-
-- `require_user`: 로그인 확인 (`/api/me`, 동의, 삭제)
-- `require_consent`: 로그인 + 동의 확인 (데이터 · AI 기능 전부). 동의 전이면 `403 consent_required` → 프론트가 동의 화면 표시
-- 체험 모드(익명 로그인)는 동의 후 샘플 지출 데이터 605건이 자동으로 채워지고, 로그아웃하면 삭제됨
-- `DELETE /api/me`: 사용자의 모든 데이터 + 프로필 + Firebase 계정 삭제
-
-Swagger(`/docs`)에서 테스트할 때는 우측 상단 **Authorize**에 ID 토큰을 넣는다.
-(브라우저 콘솔에서 로그인 상태로 `await (await import('./auth.js')).getIdToken()` 실행)
-
-## Firebase 설정 (새 프로젝트)
-
-1. Firestore Database 만들기
-2. Authentication → 로그인 방법 → **Google**, **익명** 사용 설정
-3. Authentication → 설정 → **승인된 도메인**에 `localhost`(기본 포함)와 배포한 Vercel 도메인 추가
-4. 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성 → 백엔드용 JSON
-5. 프로젝트 설정 → 일반 → 내 앱 → 웹 앱(`</>`) 추가 → `firebaseConfig` 값 → 프론트용
-
-## 로컬 실행
-
-```bash
-# 백엔드
+# Backend
 cd backend
-py -3.12 -m venv venv && .\venv\Scripts\Activate.ps1   # macOS/Linux: python3.12 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env                                   # 키 채우기
-uvicorn main:app --reload                              # http://127.0.0.1:8000/docs
+python -m venv venv
+.\venv\Scripts\Activate.ps1          # macOS/Linux: source venv/bin/activate
+pip install -r requirements-dev.txt
+cp .env.example .env                 # OPENAI_API_KEY, Firebase 서비스 계정 경로 채우기
+uvicorn main:app --reload --port 8000  # http://127.0.0.1:8000/docs
 
-# 프론트엔드 (처음 한 번: frontend/config.example.js를 config.js로 복사해 FIREBASE_CONFIG를 채울 것. config.js는 커밋되지 않음)
+# Frontend (새 터미널)
 cd frontend
-python -m http.server 5500                             # http://localhost:5500
+cp config.example.js config.js       # Firebase 웹 설정 채우기 (config.js는 커밋하지 않음)
+python -m http.server 5500           # http://127.0.0.1:5500
 ```
 
-테스트: `python tests/test_api.py` (메모리 DB + 가짜 토큰 `dev:<uid>`로 인증·사용자 분리·동의·삭제·한도 검증)
+```bash
+# 자동 테스트 (API 키 불필요, 마지막 줄 ALL TESTS PASSED)
+cd backend && python tests/test_api.py
+# AI Agent 정량 평가 (실제 GPT 사용, 1회 약 100원)
+cd backend && python -m eval.agent_eval
+# 커밋 전 시크릿 검사 (저장소 루트에서, 0건이어야 함)
+python backend/scripts/check_secrets.py
+```
 
-## 환경 변수
+## 사용자 테스트 결과
+> 진행 예정 — 진행 방법은 [UT_GUIDE](docs/UT_GUIDE.md), 결과 기록은 [USER_FEEDBACK](docs/USER_FEEDBACK.md)
+- 테스터: (5명, 구성)
+- 주요 피드백 및 반영 사항:
+  - "(피드백)" → (반영 내용)
 
-**Backend (Render)**
-
-| 이름 | 설명 |
-|---|---|
-| `OPENAI_API_KEY` | OpenAI API 키 |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | 서비스 계정 JSON 전체 (로컬은 `FIREBASE_SERVICE_ACCOUNT_PATH`) |
-| `ALLOWED_ORIGINS` | CORS 허용 도메인, 쉼표 구분 |
-| `DAILY_CHAT_LIMIT` | 사용자별 하루 채팅 횟수, 기본 50 |
-| `OPENAI_MODEL`, `OPENAI_MAX_TOKENS`, `CHAT_HISTORY_LIMIT` | 선택 |
-
-**Frontend (Vercel)**
-
-| 이름 | 설명 |
-|---|---|
-| `API_BASE_URL` | 백엔드 주소 |
-| `FIREBASE_CONFIG` | `firebaseConfig`를 JSON 한 줄로: `{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}` |
+## 링크
+- 배포 URL: https://final-project-frontend-seven-beta.vercel.app
+  - 별도 계정 없이 **"로그인 없이 체험하기"** → 동의 → 6개월 샘플 지출 605건으로 바로 사용
+  - 이미지 인식은 [샘플 이미지 3장](docs/sample_images/README.md)으로 테스트 (첫 접속 시 서버 깨우는 데 최대 1분)
+- 서비스 기획서: [docs/서비스_기획서.md](docs/서비스_기획서.md)
+- 기능 요구 명세서: [docs/기능_요구_명세서.md](docs/기능_요구_명세서.md)
+- 테스트 결과: [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md) · [docs/G4_CHECKLIST.md](docs/G4_CHECKLIST.md)
+- 진행 기록: [docs/PROGRESS_LOG.md](docs/PROGRESS_LOG.md)
+- 발표 자료: /docs/presentation.pdf (작성 예정)
+- 시연 영상: (작성 예정)
