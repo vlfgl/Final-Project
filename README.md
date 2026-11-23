@@ -1,4 +1,5 @@
 # AI 소비 패턴 분석 및 절약 코치
+<img width="1917" height="947" alt="image" src="https://github.com/user-attachments/assets/96d199f6-15d0-4d5d-838b-fb528dc3e7ca" />
 
 ## 1. 프로젝트 소개 — 문제 정의와 해결 방식
 **문제**: 지출을 줄이고 싶어도 기록·해석·실천 세 단계에서 막힙니다.
