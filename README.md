@@ -48,7 +48,7 @@ AI 코치(AI Agent)는 질문에 맞는 지출 데이터를 직접 조회해 근
 
 ### 설치 및 실행
 ```bash
-git clone <https://github.com/vlfgl/Final-Project>
+git clone https://github.com/vlfgl/Final-Project
 cd <저장소 폴더>
 
 # Backend
