@@ -24,11 +24,11 @@
 
 ### 실제 기여 내용 · 담당 코드 · GitHub 작업 기록
 
-| 이름 | 담당 코드·문서 | 실제 기여 내용 (본인 작성) | GitHub 작업 기록 |
-|------|---------------|---------------------------|------------------|
-| 박채원 | `backend/main.py`, `backend/app/routers/`, `services/user_service.py`·`transaction_service.py`, `firestore.rules`, `render.yaml` | | [커밋 목록](<저장소 주소>/commits?author=<아이디>) |
-| 안소연 | `frontend/index.html`·`app.js`·`style.css`·`auth.js`, `docs/UT_GUIDE.md`·`USER_FEEDBACK.md` | | [커밋 목록](<저장소 주소>/commits?author=<아이디>) |
-| 곽승렬 | `services/agent_tools.py`·`chat_service.py`·`vision_service.py`·`upload_service.py`·`summary_service.py`·`goal_service.py`·`insight_service.py`, `backend/eval/`, `docs/G4_CHECKLIST.md`·`TEST_RESULTS.md` | | [커밋 목록](<저장소 주소>/commits?author=<아이디>) |
+| 이름 | 담당 코드·문서 |
+|------|---------------|
+| 박채원 | `backend/main.py`<br>`backend/app/routers/`<br>`user_service.py` · `transaction_service.py`<br>`firestore.rules` · `render.yaml` |
+| 안소연 | `frontend/index.html` · `app.js` · `style.css` · `auth.js`<br>`docs/UT_GUIDE.md` · `USER_FEEDBACK.md` |
+| 곽승렬 | `services/agent_tools.py` · `chat_service.py` · `vision_service.py`<br>`upload_service.py` · `summary_service.py` · `goal_service.py` · `insight_service.py`<br>`backend/eval/`<br>`docs/G4_CHECKLIST.md` · `TEST_RESULTS.md` |
 
 전체 진행 과정과 주요 의사결정은 [PROGRESS_LOG](docs/PROGRESS_LOG.md)에 날짜별로 기록했습니다.
 
