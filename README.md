@@ -104,8 +104,8 @@
 
 ### 설치 및 실행
 ```bash
-git clone <저장소 주소>
-cd <저장소 폴더>
+git clone https://github.com/vlfgl/Final-Project
+cd Final-Project
 
 # Backend
 cd backend
