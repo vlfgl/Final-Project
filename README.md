@@ -44,7 +44,8 @@
 
 
 ## 4. 시스템 아키텍처
-![시스템 아키텍처](docs/images/system_architecture.png)
+<img width="2640" height="1440" alt="system_architecture" src="https://github.com/user-attachments/assets/44a6b481-3d96-468f-b5f8-0e07e6a90087" />
+
 
 ## 5. 핵심 AI 활용 — 구현 근거
 
