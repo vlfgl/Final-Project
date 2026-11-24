@@ -130,7 +130,7 @@ python backend/scripts/check_secrets.py     # 커밋 전 시크릿 검사 (0건�
 ## 11. 링크
 - **배포 URL**: https://final-project-frontend-seven-beta.vercel.app
   - 계정 없이 **"로그인 없이 체험하기"** → 동의 → 6개월 샘플 지출 605건으로 바로 사용 (첫 접속 시 서버 깨우는 데 최대 1분)
-- **최종 발표 자료**: /docs/presentation.pdf (작성 예정)
+- **최종 발표 자료**: [docs/presentation.pdf](docs/presentation.pdf)
 - **시연 영상**: (작성 예정)
 - 서비스 기획서: [docs/서비스_기획서.md](docs/서비스_기획서.md)
 - 기능 요구 명세서: [docs/기능_요구_명세서.md](docs/기능_요구_명세서.md)
