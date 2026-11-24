@@ -11,10 +11,10 @@ AI 소비 패턴 분석 및 절약 코치의 개발 과정과 주요 의사결�
 | 날짜 | 단계 | 한 일 | 담당 | 대표 커밋 |
 | --- | --- | --- | --- | --- |
 | 11-01 | 저장소 생성 | 이전 과제(개인 재무 관리 AI 비서)의 FastAPI·Firestore·로그인 구조를 가져와 시작. 대화 기록, 소비 요약, 가상 지출 데이터 생성 | 박채원 | [`85e7223`](https://github.com/vlfgl/Final-Project/commit/85e7223) |
-| 11-03 | 핵심 기능 뼈대 | 캡처·영수증 인식(`vision_service`), 확인 표를 거친 저장(`upload_service`), 거래 관리, 월 절약 목표 API와 화면 | 박채원 | [`49a3086`](https://github.com/vlfgl/Final-Project/commit/49a3086), [`e12f370`](https://github.com/vlfgl/Final-Project/commit/e12f370) |
-| 11-20 | **AI Agent 전환** | Function Calling 도구 7개(`agent_tools.py`), 조회 근거 표시, 목표 제안 카드, Agent 정량 평가 스크립트(`backend/eval/`) | 박채원 | [`681ab44`](https://github.com/vlfgl/Final-Project/commit/681ab44) |
+| 11-03 | 핵심 기능 뼈대 | 캡처·영수증 인식(`vision_service`), 확인 표를 거친 저장(`upload_service`), 거래 관리, 월 절약 목표 API와 화면 | 박채원, 곽승렬 | [`49a3086`](https://github.com/vlfgl/Final-Project/commit/49a3086), [`e12f370`](https://github.com/vlfgl/Final-Project/commit/e12f370) |
+| 11-20 | **AI Agent 전환** | Function Calling 도구 7개(`agent_tools.py`), 조회 근거 표시, 목표 제안 카드, Agent 정량 평가 스크립트(`backend/eval/`) | 박채원, 곽승렬 | [`681ab44`](https://github.com/vlfgl/Final-Project/commit/681ab44) |
 | 11-20 | 소비 알림 카드 | 코드 규칙으로 과소비·목표 초과를 계산하는 `/api/insights`와 카드 화면 | 박채원 | [`68653c0`](https://github.com/vlfgl/Final-Project/commit/68653c0) |
-| 11-20 | 보안·평가 대비 | `config.js` 저장소 제외와 키 교체, Firestore 규칙, 시크릿 검사 스크립트, 평가용 샘플 이미지 3장, AI 실패 시 사용 한도 환불 | 박채원 | [`df11f69`](https://github.com/vlfgl/Final-Project/commit/df11f69) |
+| 11-20 | 보안·평가 대비 | `config.js` 저장소 제외와 키 교체, Firestore 규칙, 시크릿 검사 스크립트, 평가용 샘플 이미지 3장, AI 실패 시 사용 한도 환불 | 박채원, 안소연 | [`df11f69`](https://github.com/vlfgl/Final-Project/commit/df11f69) |
 | 11-20~21 | 프론트엔드 개선 | 금액 입력 쉼표 자동 표시, HEIC 사진 사전 안내, 썸네일 메모리 해제 | 안소연 | [`445afd8`](https://github.com/vlfgl/Final-Project/commit/445afd8), [`67115da`](https://github.com/vlfgl/Final-Project/commit/67115da) |
 | 11-21~22 | **이미지 인식 날짜 개선** | 날짜 머리글별 묶음 방식으로 응답 형식 변경, 월이 없는 날짜를 요일로 결정. 브랜치 `KSR/BACKEND`에서 작업 후 PR로 병합 | 곽승렬 | [`50d8434`](https://github.com/vlfgl/Final-Project/commit/50d8434), [PR #1](https://github.com/vlfgl/Final-Project/pull/1) |
 | 11-22 | 필수 기능 검증 | Must 기능 16개를 배포 환경에서 3회씩 실행, 화면 증거 6장 | 곽승렬 | [`2a30082`](https://github.com/vlfgl/Final-Project/commit/2a30082) |
@@ -47,9 +47,3 @@ AI 소비 패턴 분석 및 절약 코치의 개발 과정과 주요 의사결�
 - 자동 테스트: `python backend/tests/test_api.py` (섹션 1~25)
 - 실사용자 피드백: [USER_FEEDBACK.md](USER_FEEDBACK.md)
 
-## 4. 남은 일
-
-- [ ] 실사용자 테스트 5명 이상 완료 ([UT_GUIDE.md](UT_GUIDE.md)), 상위 피드백 2~3건 반영 커밋
-- [ ] 외부 사용자 1 제보(카드명세서 사진에서 1건만 인식) 재현 및 원인 확인
-- [ ] README에 팀원별 기여 요약과 대표 커밋 링크 작성 (각자 본인 계정으로)
-- [ ] 발표 자료 8번 슬라이드에 사용자 피드백 반영 후 PDF 갱신
