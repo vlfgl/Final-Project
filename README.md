@@ -75,7 +75,7 @@
 | 전체 API | 자동 테스트 26개 섹션 (API 키 없이 가짜 모델) | 모두 통과 |
 | 배포 환경 | 시크릿 창 접속, 체험 모드, 코치 질문 | 정상 동작, 답변 금액이 차트 금액과 일치 |
 
-자세한 내용: [TEST_RESULTS](docs/TEST_RESULTS.md) · 필수 기능 16개 3회 검증 기록: [G4_CHECKLIST](docs/G4_CHECKLIST.md)
+자세한 내용: [TEST_RESULTS](docs/TEST_RESULTS.md) · 필수 기능 16개 3회 검증 기록: [G4_CHECKLIST](docs/Test_Results/G4_Test_Results.md)
 
 ## 8. 실사용자 테스트 결과
 > 진행 방법 [UT_GUIDE](docs/UT_GUIDE.md) · 응답과 반영 기록 [USER_FEEDBACK](docs/USER_FEEDBACK.md)
