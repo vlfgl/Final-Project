@@ -514,3 +514,49 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .review-table td:last-child { min-width: 220px; } .review-table td:last-child .badge { white-space: normal; line-height: 1.4; }
 input.money { text-align: right; font-variant-numeric: tabular-nums; }
 .review-table td.c-amount input, .review-table input.money { min-width: 12ch; }
+
+/* ---------- 글자 크기 (UT-T1) ---------- */
+.font-btn { font-weight: 800; }
+html[data-font="lg"] .font-btn { font-size: 16px; }
+html[data-font="xl"] .font-btn { font-size: 18px; }
+.msg { line-height: 1.65; }
+html[data-font="lg"] .msg, html[data-font="lg"] #chatInput { font-size: 16px; }
+html[data-font="xl"] .msg, html[data-font="xl"] #chatInput { font-size: 18px; line-height: 1.7; }
+html[data-font="lg"] .data-table { font-size: 15px; }
+html[data-font="xl"] .data-table { font-size: 16px; }
+html[data-font="lg"] .trace, html[data-font="lg"] .ai-tag, html[data-font="lg"] .insight-detail { font-size: 13px; }
+html[data-font="xl"] .trace, html[data-font="xl"] .ai-tag, html[data-font="xl"] .insight-detail { font-size: 14px; }
+
+/* ---------- 지출 내역 거르기 (UT-T1) ---------- */
+.data-toolbar { flex-wrap: wrap; }
+.data-toolbar input[type="search"], .data-toolbar select {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 12px;
+}
+.data-toolbar input[type="search"] { width: 140px; }
+.data-cats { display: flex; gap: 6px; overflow-x: auto; padding: 0 14px 10px; }
+.cat-chip {
+  flex: none; border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.cat-chip:hover { background: var(--surface-2); }
+.cat-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---------- 월별 지출: 카테고리 누적 막대 + 전월 대비 ---------- */
+.chart .stack.partial { opacity: .5; }
+.chart .stack.hover { filter: brightness(1.1); }
+.chart .bar-pct { font-size: 9px; font-weight: 700; fill: var(--muted); }
+.chart .bar-pct.delta-up { fill: var(--bad); }
+.chart .bar-pct.delta-down { fill: var(--good); }
+.mini-legend { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--text-2); }
+.mini-legend li { display: flex; align-items: center; gap: 4px; }
+.mini-legend .dot, .cmp-row .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.cat-compare { margin-top: 6px; }
+.cmp-row { display: grid; grid-template-columns: 8px 1fr auto auto 52px; gap: 8px; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.cmp-row:last-child { border-bottom: 0; }
+.cmp-amt { font-weight: 600; text-align: right; }
+.cmp-prev { font-size: 11px; text-align: right; }
+.cmp-pct { font-weight: 700; text-align: right; }
+.cmp-pct.delta-up { color: var(--bad); }
+.cmp-pct.delta-down { color: var(--good); }
+html[data-font="lg"] .cmp-row { font-size: 14px; }
+html[data-font="xl"] .cmp-row { font-size: 15px; }

@@ -110,6 +110,20 @@ def build_summary(rows: list[dict], today: Optional[date] = None) -> dict:
 
     top = sorted(by_cat.items(), key=lambda x: x[1], reverse=True)
 
+    # 카테고리별 이번 달 vs 지난달 같은 기간 (소비 요약의 '지난달 대비' 목록)
+    cur_cat, prev_cat = defaultdict(int), defaultdict(int)
+    for r in rows:
+        d, c = r["date"], r.get("category") or "기타"
+        if d.startswith(cur_key) and d <= today.isoformat():
+            cur_cat[c] += int(r["amount"])
+        elif d.startswith(prev_key) and d <= prev_end:
+            prev_cat[c] += int(r["amount"])
+    category_compare = [
+        {"category": c, "current": cur_cat[c], "prev_same_period": prev_cat[c] if has_prev else None,
+         "pct": _pct(cur_cat[c], prev_cat[c]) if has_prev and prev_cat[c] else None}
+        for c in sorted(set(cur_cat) | set(prev_cat), key=lambda c: (cur_cat[c], prev_cat[c]), reverse=True)
+    ]
+
     return {
         "period": f"{first.isoformat()} ~ {last.isoformat()}",
         "count": len(rows),
@@ -136,6 +150,7 @@ def build_summary(rows: list[dict], today: Optional[date] = None) -> dict:
             "prev_same_period_days": min(elapsed, prev_last.day),
             "prev_same_period_total": prev_same if has_prev else None,
             "vs_prev_same_period_pct": _pct(cur_total, prev_same) if has_prev and prev_same else None,
+            "category_compare": category_compare,
         },
         "monthly_totals": dict(sorted(monthly.items())),
         "monthly_categories": {

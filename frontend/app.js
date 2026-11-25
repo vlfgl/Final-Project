@@ -135,6 +135,25 @@
       try { localStorage.setItem("theme", next); } catch (_) { /* noop */ }
     });
   }
+  // 글자 크기 (UT-T1: 글자가 작아 오래 읽기 힘들다는 피드백)
+  const FONT_STEPS = [["base", "기본"], ["lg", "크게"], ["xl", "아주 크게"]];
+  function initFontSize() {
+    let saved = null;
+    try { saved = localStorage.getItem("fontSize"); } catch (_) { /* noop */ }
+    applyFontSize(FONT_STEPS.some(([k]) => k === saved) ? saved : "base");
+    $("#fontToggle").addEventListener("click", () => {
+      const i = FONT_STEPS.findIndex(([k]) => k === (document.documentElement.dataset.font || "base"));
+      const next = FONT_STEPS[(i + 1) % FONT_STEPS.length][0];
+      applyFontSize(next);
+      try { localStorage.setItem("fontSize", next); } catch (_) { /* noop */ }
+    });
+  }
+  function applyFontSize(k) {
+    document.documentElement.dataset.font = k;
+    const label = FONT_STEPS.find(([key]) => key === k)[1];
+    $("#fontToggle").title = `글자 크기: ${label}`;
+    $("#fontToggle").setAttribute("aria-label", `글자 크기 바꾸기 (현재 ${label})`);
+  }
   function applyTheme(t) {
     document.documentElement.dataset.theme = t;
     $("#themeToggle").textContent = t === "dark" ? "☀️" : "🌙";
@@ -537,14 +556,42 @@
     return td;
   }
 
+  // 지출 내역 거르기·정렬 (UT-T1: 지출 내역을 한눈에 분석하기 어렵다는 피드백)
+  const dataFilter = { cat: "", q: "", sort: "date" };
+
+  function renderDataCats() {
+    const box = $("#dataCats");
+    box.innerHTML = "";
+    const sums = {};
+    for (const r of state.dataRows || []) sums[r.category] = (sums[r.category] || 0) + r.amount;
+    const cats = Object.entries(sums).sort((a, b) => b[1] - a[1]);
+    if (!cats.length) return;
+    const chip = (key, label) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "cat-chip" + (dataFilter.cat === key ? " active" : "");
+      b.textContent = label;
+      b.addEventListener("click", () => { dataFilter.cat = dataFilter.cat === key ? "" : key; renderDataTable(); });
+      return b;
+    };
+    box.appendChild(chip("", "전체"));
+    for (const [c, sum] of cats) box.appendChild(chip(c, `${c} ${won(sum)}`));
+  }
+
   function renderDataTable() {
     const tbody = $("#dataTableBody");
     tbody.innerHTML = "";
-    const rows = state.dataRows;
+    renderDataCats();
+    const q = dataFilter.q.trim().toLowerCase();
+    const rows = (state.dataRows || []).filter((r) =>
+      (!dataFilter.cat || r.category === dataFilter.cat) &&
+      (!q || String(r.merchant).toLowerCase().includes(q) || String(r.memo || "").toLowerCase().includes(q)));
+    if (dataFilter.sort === "amount") rows.sort((a, b) => b.amount - a.amount);
     const total = rows.reduce((s, r) => s + r.amount, 0);
-    $("#dataCount").textContent = `${rows.length}건 · 합계 ${won(total)}`;
+    const filtered = rows.length !== (state.dataRows || []).length;
+    $("#dataCount").textContent = `${dataFilter.cat ? dataFilter.cat + " " : ""}${q ? "검색 " : ""}${rows.length}건 · 합계 ${won(total)}`;
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted">이 기간에 거래가 없어요.</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">${filtered ? "조건에 맞는 거래가 없어요." : "이 기간에 거래가 없어요."}</td></tr>`;
       return;
     }
     const editingId = $("#dataId").value;
@@ -689,7 +736,9 @@
   function initData() {
     $("#dataForm").addEventListener("submit", submitData);
     $("#dataCancel").addEventListener("click", () => { resetForm(); setFormMessage("", ""); });
-    $("#dataMonth").addEventListener("change", loadData);
+    $("#dataMonth").addEventListener("change", () => { dataFilter.cat = ""; loadData(); });
+    $("#dataSearch").addEventListener("input", (e) => { dataFilter.q = e.target.value; renderDataTable(); });
+    $("#dataSort").addEventListener("change", (e) => { dataFilter.sort = e.target.value; renderDataTable(); });
     $("#exportCsv").addEventListener("click", exportCsv);
     $("#txDate").value = new Date().toISOString().slice(0, 10);
     loadCategories();
@@ -1233,10 +1282,12 @@
         <div id="donutChart" class="donut-wrap"></div>
         <ul id="donutLegend" class="donut-legend"></ul>
       </details>
-      <details class="fold" data-fold="monthly"${open("monthly", false)}>
+      <details class="fold" data-fold="monthly"${open("monthly", true)}>
         <summary>월별 지출</summary>
         <div class="chart" id="monthlyChart"></div>
-        <div class="chart-note">점선: 월평균 · 옅은 막대: 진행 중인 달</div>
+        <ul id="monthlyLegend" class="mini-legend"></ul>
+        <div class="chart-note">막대 위 %: 전월 대비 (진행 중인 달은 지난달 같은 기간 대비, 월 중간부터 기록한 첫 달은 비교 안 함) · 점선: 월평균 · 옅은 막대: 진행 중인 달</div>
+        <div id="catCompare" class="cat-compare"></div>
       </details>
       <details class="fold" data-fold="stats"${open("stats", false)}>
         <summary>전체 통계 · 최근 추세</summary>
@@ -1274,7 +1325,8 @@
     $("#donutPrev").addEventListener("click", () => moveDonut(s, -1));
     $("#donutNext").addEventListener("click", () => moveDonut(s, 1));
 
-    renderMonthlyChart($("#monthlyChart"), s.monthly_totals, m.monthly_average, cm);
+    renderMonthlyChart($("#monthlyChart"), s.monthly_totals, m.monthly_average, cm, s.monthly_categories, (s.period || "").slice(0, 10));
+    renderCatCompare(cm);
 
     if (!$("#dataMonth").value && cm.month) {
       $("#dataMonth").value = cm.month;
@@ -1411,31 +1463,36 @@
     return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * pow;
   }
 
-  function renderMonthlyChart(container, monthly, avg, cm) {
+  const pctText = (p) => (p == null ? "" : `${p > 0 ? "▲" : p < 0 ? "▼" : ""}${Math.abs(p).toFixed(p !== 0 && Math.abs(p) < 10 ? 1 : 0)}%`);
+  const pctClass = (p) => (p == null ? "muted" : p > 0 ? "delta-up" : p < 0 ? "delta-down" : "muted");
+
+  // 월별 지출: 카테고리별 누적 막대 + 막대 위 전월 대비 %
+  function renderMonthlyChart(container, monthly, avg, cm, monthlyCats, firstDate) {
     const entries = Object.entries(monthly || {});
     if (!entries.length) return;
-    const W = 300, H = 170, padL = 34, padR = 4, padT = 10, padB = 20;
+    const W = 300, H = 186, padL = 34, padR = 4, padT = 22, padB = 20;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const maxVal = Math.max(...entries.map(([, v]) => v), avg);
     const step = niceStep(maxVal);
     const top = Math.ceil(maxVal / step) * step;
     const y = (v) => padT + plotH - (v / top) * plotH;
     const slot = plotW / entries.length;
-    const bw = Math.min(18, slot - 6);
+    const bw = Math.min(24, slot - 8);
     const ns = "http://www.w3.org/2000/svg";
 
     const svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", "월별 지출 막대 그래프: " + entries.map(([k, v]) => `${k} ${manwon(v)}`).join(", "));
+    svg.setAttribute("aria-label", "월별 지출 카테고리 누적 막대 그래프: " + entries.map(([k, v]) => `${k} ${manwon(v)}`).join(", "));
 
-    const el = (tag, attrs, text) => {
+    const el = (tag, attrs, text, parent = svg) => {
       const n = document.createElementNS(ns, tag);
       for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
       if (text != null) n.textContent = text;
-      svg.appendChild(n);
+      parent.appendChild(n);
       return n;
     };
+    const defs = el("defs", {});
 
     for (let v = 0; v <= top; v += step) {
       el("line", { x1: padL, x2: W - padR, y1: y(v), y2: y(v), class: "grid-line" });
@@ -1444,41 +1501,104 @@
 
     const tip = document.createElement("div");
     tip.className = "tooltip hidden";
-    const bars = [];
+    const used = new Map();
     entries.forEach(([month, v], i) => {
       const cx = padL + slot * i + slot / 2;
       const x = cx - bw / 2, yt = y(v), yb = y(0), r = Math.min(4, (yb - yt) / 2);
-      // 위쪽만 둥근 막대 (기준선에 붙은 쪽은 직각)
-      const d = `M${x},${yb} V${yt + r} Q${x},${yt} ${x + r},${yt} H${x + bw - r} Q${x + bw},${yt} ${x + bw},${yt + r} V${yb} Z`;
       const partial = cm && month === cm.month;
-      const bar = el("path", { d, class: partial ? "bar partial" : "bar" });
-      bars.push(bar);
+      // 위쪽만 둥근 막대 모양으로 잘라 그 안에 카테고리 조각을 쌓는다
+      const clipId = `mclip${i}`;
+      const clip = el("clipPath", { id: clipId }, null, defs);
+      el("path", { d: `M${x},${yb} V${yt + r} Q${x},${yt} ${x + r},${yt} H${x + bw - r} Q${x + bw},${yt} ${x + bw},${yt + r} V${yb} Z` }, null, clip);
+      const g = el("g", { "clip-path": `url(#${clipId})`, class: partial ? "stack partial" : "stack" });
+      let acc = 0;
+      // 달마다 같은 순서로 쌓아야 카테고리끼리 높이를 비교할 수 있다 (CAT_COLOR 순서, '그 외'는 맨 위)
+      const order = (n) => CAT_COLOR[n] || 99;
+      const slices = donutSlices((monthlyCats || {})[month] || []).sort((a, b) => order(a.name) - order(b.name));
+      for (const sl of slices) {
+        const y1 = y(acc + sl.total), y0 = y(acc);
+        el("rect", { x, y: y1, width: bw, height: Math.max(0, y0 - y1), fill: sl.color }, null, g);
+        acc += sl.total;
+        if (!used.has(sl.name)) used.set(sl.name, sl.color);
+      }
+      if (!slices.length) el("rect", { x, y: yt, width: bw, height: yb - yt, class: "bar" }, null, g);
+
+      // 전월 대비 %: 진행 중인 달은 지난달 같은 기간 대비
+      let pct = null;
+      if (partial) pct = cm.vs_prev_same_period_pct;
+      else if (i > 0) {
+        // 데이터가 월 중간부터 시작한 첫 달과는 비교하지 않는다 (부분 월이라 증가율이 부풀려짐)
+        const prevPartial = i === 1 && firstDate && firstDate.slice(0, 7) === entries[0][0] && !firstDate.endsWith("-01");
+        const pv = entries[i - 1][1];
+        pct = pv && !prevPartial ? Math.round(((v - pv) / pv) * 1000) / 10 : null;
+      }
+      if (pct != null) el("text", { x: cx, y: yt - 5, "text-anchor": "middle", class: `bar-pct ${pctClass(pct)}` }, pctText(pct));
+
       el("text", { x: cx, y: H - 6, "text-anchor": "middle", class: "axis-label" }, `${Number(month.slice(5))}월`);
-      // 막대보다 넓은 투명 히트 영역
       const hit = el("rect", { x: padL + slot * i, y: padT, width: slot, height: plotH, fill: "transparent" });
+      const top3 = slices.slice().sort((a, b) => b.total - a.total).slice(0, 3).map((c) => `${c.name} ${manwon(c.total)}`).join(", ");
       const label = partial
-        ? `${month} · ${won(v)} (진행 중, 예상 ${manwon(cm.projected_total)})`
-        : `${month} · ${won(v)} (월평균 대비 ${v >= avg ? "+" : ""}${(((v - avg) / avg) * 100).toFixed(1)}%)`;
+        ? `${month} · ${won(v)} (진행 중, 예상 ${manwon(cm.projected_total)}) · ${top3}`
+        : `${month} · ${won(v)}${pct != null ? ` (전월 대비 ${pct > 0 ? "+" : ""}${pct}%)` : ""} · ${top3}`;
       hit.addEventListener("mouseenter", () => {
-        bar.classList.add("hover");
+        g.classList.add("hover");
         tip.textContent = label;
         tip.classList.remove("hidden");
         const rect = svg.getBoundingClientRect();
         const scale = rect.width / W;
-        const half = tip.offsetWidth / 2; // 패널 밖으로 잘리지 않도록 툴팁 폭 기준으로 위치 보정
+        const half = tip.offsetWidth / 2;
         tip.style.left = `${Math.min(Math.max(cx * scale, half), rect.width - half)}px`;
         tip.style.top = `${yt * scale}px`;
       });
-      hit.addEventListener("mouseleave", () => {
-        bar.classList.remove("hover");
-        tip.classList.add("hidden");
-      });
+      hit.addEventListener("mouseleave", () => { g.classList.remove("hover"); tip.classList.add("hidden"); });
     });
 
     el("line", { x1: padL, x2: W - padR, y1: y(avg), y2: y(avg), class: "avg-line" });
 
     container.innerHTML = "";
     container.append(svg, tip);
+
+    const legend = $("#monthlyLegend");
+    if (legend) {
+      legend.innerHTML = "";
+      for (const [name, color] of [...used].sort((a, b) => (CAT_COLOR[a[0]] || 99) - (CAT_COLOR[b[0]] || 99))) {
+        const li = document.createElement("li");
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        dot.style.background = color;
+        li.append(dot, document.createTextNode(name));
+        legend.appendChild(li);
+      }
+    }
+  }
+
+  // 카테고리별 지난달 같은 기간 대비
+  function renderCatCompare(cm) {
+    const box = $("#catCompare");
+    if (!box) return;
+    box.innerHTML = "";
+    const items = (cm.category_compare || []).filter((c) => c.current > 0 || c.prev_same_period > 0);
+    if (!items.length) return;
+    const head = document.createElement("div");
+    head.className = "section-title";
+    head.textContent = cm.prev_same_period_total == null
+      ? `${monthLabel(cm.month)} 카테고리별 지출`
+      : `카테고리별 지난달 대비 (${monthLabel(cm.prev_month)} 1~${cm.prev_same_period_days}일과 비교)`;
+    box.appendChild(head);
+    for (const c of items.slice(0, 8)) {
+      const row = document.createElement("div");
+      row.className = "cmp-row";
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = CAT_COLOR[c.category] ? `var(--cat-${CAT_COLOR[c.category]})` : "var(--cat-other)";
+      const name = el("span", "cmp-name", c.category);
+      const amt = el("span", "cmp-amt nums", won(c.current));
+      const prev = el("span", "cmp-prev nums muted", c.prev_same_period == null ? "" : `← ${manwon(c.prev_same_period)}`);
+      const pctTxt = c.pct == null ? (c.prev_same_period === 0 && c.current > 0 ? "새로 생김" : "–") : pctText(c.pct);
+      const p = el("span", `cmp-pct nums ${c.pct == null ? "muted" : pctClass(c.pct)}`, pctTxt);
+      row.append(dot, name, amt, prev, p);
+      box.appendChild(row);
+    }
   }
 
   // ---------------------------------------------------------------- 로그인 / 동의 / 사용자 메뉴
@@ -1618,6 +1738,7 @@
   // ---------------------------------------------------------------- 시작
   async function init() {
     initTheme();
+    initFontSize();
     initTabs();
     initChat();
     initData();

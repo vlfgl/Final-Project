@@ -452,4 +452,15 @@ assert [(i["merchant"], i["date"]) for i in _o] == [("스타벅스 역삼점", "
 assert not any("월이 없어" in n for n in _o[4]["notes"])   # 큰 머리글로 월이 보였으면 추측 안내를 붙이지 않는다
 from app.services import vision_service as _vs
 assert "sections" in _vs.SCHEMA["required"] and "transactions" not in _vs.SCHEMA["properties"]
+
+# 26) 카테고리별 지난달 같은 기간 대비 (소비 요약 '지난달 대비' 목록)
+_cc_rows = [{"date": "2026-10-03", "amount": 10000, "merchant": "a", "category": "식비"},
+            {"date": "2026-10-20", "amount": 90000, "merchant": "b", "category": "식비"},   # 같은 기간(1~10일) 밖
+            {"date": "2026-10-05", "amount": 5000, "merchant": "c", "category": "카페·간식"},
+            {"date": "2026-11-04", "amount": 15000, "merchant": "d", "category": "식비"},
+            {"date": "2026-11-06", "amount": 7000, "merchant": "e", "category": "배달"}]
+_cc = {x["category"]: x for x in build_summary(_cc_rows, today=_d(2026, 11, 10))["current_month"]["category_compare"]}
+assert _cc["식비"]["current"] == 15000 and _cc["식비"]["prev_same_period"] == 10000 and _cc["식비"]["pct"] == 50.0, _cc
+assert _cc["배달"]["pct"] is None and _cc["배달"]["prev_same_period"] == 0      # 지난달 같은 기간에 없던 카테고리
+assert _cc["카페·간식"]["current"] == 0 and _cc["카페·간식"]["pct"] == -100.0
 print("ALL TESTS PASSED")
